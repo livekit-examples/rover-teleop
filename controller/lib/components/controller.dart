@@ -8,11 +8,7 @@ class Controller extends StatefulWidget {
   final String url;
   final String token;
 
-  const Controller({
-    super.key,
-    required this.url,
-    required this.token,
-  });
+  const Controller({super.key, required this.url, required this.token});
 
   @override
   State<Controller> createState() => _ControllerState();
@@ -56,10 +52,10 @@ class _ControllerState extends State<Controller> {
     try {
       // Create a new room
       _room = lk.Room();
-      
+
       // Set up listeners for room events
       _listener = _room!.createListener();
-      
+
       _listener!.on<lk.RoomConnectedEvent>((event) {
         setState(() {
           _connected = true;
@@ -68,7 +64,7 @@ class _ControllerState extends State<Controller> {
         _updateParticipants();
         print('Connected to room: ${event.room.name}');
       });
-      
+
       _listener!.on<lk.RoomDisconnectedEvent>((event) {
         setState(() {
           _connected = false;
@@ -80,13 +76,13 @@ class _ControllerState extends State<Controller> {
         });
         print('Disconnected from room: ${event.reason}');
       });
-      
+
       _listener!.on<lk.ParticipantConnectedEvent>((event) {
         _updateParticipants();
         _checkForRoverCam(event.participant);
         print('Participant connected: ${event.participant.identity}');
       });
-      
+
       _listener!.on<lk.ParticipantDisconnectedEvent>((event) {
         _updateParticipants();
         if (event.participant.identity == 'rover-cam') {
@@ -97,25 +93,25 @@ class _ControllerState extends State<Controller> {
         }
         print('Participant disconnected: ${event.participant.identity}');
       });
-      
+
       _listener!.on<lk.TrackSubscribedEvent>((event) {
-        if (event.participant.identity == 'rover-cam' && 
+        if (event.participant.identity == 'rover-cam' &&
             event.track is lk.VideoTrack) {
           setState(() {
             _roverVideoTrack = event.track as lk.VideoTrack;
             _roverParticipant = event.participant;
           });
           print('Subscribed to rover-cam video track');
-          
+
           // Start sending control data if we have a gamepad
           if (_gamepadService.isGamepadConnected.value) {
             _startSendingControlData();
           }
         }
       });
-      
+
       _listener!.on<lk.TrackUnsubscribedEvent>((event) {
-        if (event.participant.identity == 'rover-cam' && 
+        if (event.participant.identity == 'rover-cam' &&
             event.track is lk.VideoTrack) {
           setState(() {
             _roverVideoTrack = null;
@@ -127,10 +123,7 @@ class _ControllerState extends State<Controller> {
 
       print('Connecting to room: ${widget.url} with token: ${widget.token}');
       // Connect to the room
-      await _room!.connect(
-        widget.url, 
-        widget.token,
-      );
+      await _room!.connect(widget.url, widget.token);
     } catch (error) {
       setState(() {
         _connecting = false;
@@ -143,52 +136,60 @@ class _ControllerState extends State<Controller> {
 
   void _startSendingControlData() {
     if (_sendingControls) return;
-    
+
     setState(() {
       _sendingControls = true;
     });
-    
+
     // Set up a timer to send control data at 20Hz (every 50ms)
-    _controlsTimer = Timer.periodic(const Duration(milliseconds: 50), (_) => _sendControls());
+    _controlsTimer = Timer.periodic(
+      const Duration(milliseconds: 50),
+      (_) => _sendControls(),
+    );
   }
-  
+
   void _stopSendingControlData() {
     if (!_sendingControls) return;
-    
+
     setState(() {
       _sendingControls = false;
     });
-    
+
     _controlsTimer?.cancel();
     _controlsTimer = null;
   }
-  
+
   void _sendControls() {
-    if (!_sendingControls || _room == null || _room!.localParticipant == null) return;
-    
+    if (!_sendingControls || _room == null || _room!.localParticipant == null)
+      return;
+
     try {
       // Get the current controller values
       final controlValues = _gamepadService.controllerValues.value;
-      
+
       // Create a smaller object with just the essential joystick values
       final smallerControlData = {
         'left_x': double.parse(controlValues['leftStickX'].toStringAsFixed(3)),
         'left_y': double.parse(controlValues['leftStickY'].toStringAsFixed(3)),
-        'right_x': double.parse(controlValues['rightStickX'].toStringAsFixed(3)),
-        'right_y': double.parse(controlValues['rightStickY'].toStringAsFixed(3))
+        'right_x': double.parse(
+          controlValues['rightStickX'].toStringAsFixed(3),
+        ),
+        'right_y': double.parse(
+          controlValues['rightStickY'].toStringAsFixed(3),
+        ),
       };
-      
+
       // Create a JSON string from the smaller control data
       final controlData = {
         'type': 'gamepad',
         'data': smallerControlData,
         'timestamp': DateTime.now().millisecondsSinceEpoch,
       };
-      
+
       // Convert the JSON map to a string and then to UTF-8 bytes
       final jsonString = jsonEncode(controlData);
       final dataBytes = utf8.encode(jsonString);
-      
+
       // Send the control data as a List<int>
       _room!.localParticipant!.publishData(dataBytes, topic: 'controls');
 
@@ -207,14 +208,14 @@ class _ControllerState extends State<Controller> {
     if (participant.identity == 'rover-cam') {
       // Check if participant already has published video tracks
       for (var trackPublication in participant.trackPublications.values) {
-        if (trackPublication.kind == lk.TrackType.VIDEO && 
-            trackPublication.subscribed && 
+        if (trackPublication.kind == lk.TrackType.VIDEO &&
+            trackPublication.subscribed &&
             trackPublication.track != null) {
           setState(() {
             _roverVideoTrack = trackPublication.track as lk.VideoTrack;
             _roverParticipant = participant;
           });
-          
+
           // Start sending control data if we have a gamepad
           if (_gamepadService.isGamepadConnected.value) {
             _startSendingControlData();
@@ -227,7 +228,7 @@ class _ControllerState extends State<Controller> {
 
   Future<void> _disconnectFromLiveKit() async {
     _stopSendingControlData();
-    
+
     if (_room != null) {
       await _room!.disconnect();
       _room = null;
@@ -249,7 +250,7 @@ class _ControllerState extends State<Controller> {
           _participants.add(_room!.localParticipant!);
         }
         _participants.addAll(_room!.remoteParticipants.values);
-        
+
         // Check if rover-cam is already in the room
         for (var participant in _participants) {
           _checkForRoverCam(participant);
@@ -280,11 +281,7 @@ class _ControllerState extends State<Controller> {
           _buildRoverVideoView()
         else
           const Text("Waiting for rover-cam video..."),
-        Positioned(
-          top: 12,
-          left: 12,
-          child: _buildGamepadStatus(),
-        ),
+        Positioned(top: 12, left: 12, child: _buildGamepadStatus()),
       ],
     );
   }
@@ -293,19 +290,144 @@ class _ControllerState extends State<Controller> {
     return ValueListenableBuilder<bool>(
       valueListenable: _gamepadService.isGamepadConnected,
       builder: (context, isConnected, child) {
-        return Row(
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isConnected && _roverVideoTrack != null) ...[
-              ElevatedButton(
-                onPressed: _sendingControls ? _stopSendingControlData : _startSendingControlData,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _sendingControls ? Colors.red : Colors.green,
-                ),
-                child: Text(_sendingControls ? "Stop Teleop" : "Start Teleop", style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Colors.white),),
+              Column(
+                children: [
+                  ElevatedButton(
+                    onPressed:
+                        _sendingControls
+                            ? _stopSendingControlData
+                            : _startSendingControlData,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          _sendingControls ? Colors.red : Colors.green,
+                      fixedSize: const Size(100, 36),
+                    ),
+                    child: Text(
+                      _sendingControls ? "Stop" : "Start",
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium!.copyWith(color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _buildJoystickVisualizer(),
+                ],
               ),
             ],
           ],
+        );
+      },
+    );
+  }
+
+  Widget _buildJoystickVisualizer() {
+    return ValueListenableBuilder<Map<String, dynamic>>(
+      valueListenable: _gamepadService.controllerValues,
+      builder: (context, values, child) {
+        final leftY = (values['leftStickY'] as num?)?.toDouble() ?? 0.0;
+        final rightX = (values['rightStickX'] as num?)?.toDouble() ?? 0.0;
+
+        return Container(
+          width: 100,
+          height: 100,
+          decoration: BoxDecoration(
+            color: Colors.black26,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Stack(
+            children: [
+              // Vertical bar (left_y)
+              Center(
+                child: Container(
+                  width: 10,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              ),
+              // Horizontal bar (right_x)
+              Center(
+                child: Container(
+                  width: 80,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(5),
+                  ),
+                ),
+              ),
+              // Center dot
+              Center(
+                child: Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.black38,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              // Y indicator (left_y)
+              Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 100),
+                  transform: Matrix4.translationValues(0, -leftY * 35, 0),
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: const BoxDecoration(
+                      color: Colors.blue,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+              // X indicator (right_x)
+              Center(
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 100),
+                  transform: Matrix4.translationValues(rightX * 35, 0, 0),
+                  child: Container(
+                    width: 16,
+                    height: 16,
+                    decoration: const BoxDecoration(
+                      color: Colors.red,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 2,
+                left: 4,
+                child: Text(
+                  leftY.toStringAsFixed(2),
+                  style: Theme.of(context).textTheme.displaySmall!.copyWith(
+                    color: Colors.blue,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              Positioned(
+                bottom: 2,
+                right: 4,
+                child: Text(
+                  rightX.toStringAsFixed(2),
+                  style: Theme.of(context).textTheme.displaySmall!.copyWith(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
         );
       },
     );
@@ -317,9 +439,7 @@ class _ControllerState extends State<Controller> {
         SizedBox(
           height: 600,
           width: 800,
-          child: lk.VideoTrackRenderer(
-            _roverVideoTrack!,
-          ),
+          child: lk.VideoTrackRenderer(_roverVideoTrack!),
         ),
       ],
     );
@@ -357,7 +477,9 @@ class _ControllerState extends State<Controller> {
           padding: const EdgeInsets.only(top: 16.0),
           child: Text(
             _errorMessage ?? '',
-            style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Colors.red),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium!.copyWith(color: Colors.red),
           ),
         ),
       ],
@@ -372,7 +494,9 @@ class _ControllerState extends State<Controller> {
           padding: const EdgeInsets.only(top: 16.0),
           child: Text(
             'Connecting to LiveKit...',
-            style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Colors.grey),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium!.copyWith(color: Colors.grey),
           ),
         ),
       ],

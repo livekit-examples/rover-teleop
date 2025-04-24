@@ -7,13 +7,13 @@ import 'services/env_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Load environment variables from .env file
   await EnvService.init();
-  
+
   // Initialize GamepadService
   await GamepadService().initialize();
-  
+
   // Initialize LiveKit logger
   LiveKitClient.initialize();
   runApp(const MyApp());
@@ -55,14 +55,14 @@ class MyApp extends StatelessWidget {
             fontStyle: FontStyle.italic,
           ),
           bodyMedium: GoogleFonts.roboto(),
-          displaySmall: GoogleFonts.pacifico(),
+          displaySmall: GoogleFonts.roboto(fontSize: 12),
         ),
         useMaterial3: true,
       ),
       home: Controller(
-                url: EnvService.livekitUrl,
-                token: EnvService.livekitToken,
-              ),
+        url: EnvService.livekitUrl,
+        token: EnvService.livekitToken,
+      ),
       debugShowCheckedModeBanner: false,
     );
   }

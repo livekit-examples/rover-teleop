@@ -280,7 +280,12 @@ class _ControllerState extends State<Controller> {
         if (_roverVideoTrack != null)
           _buildRoverVideoView()
         else
-          const Text("Waiting for rover-cam video..."),
+          Text(
+            "Waiting for rover to connect...",
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium!.copyWith(color: Colors.grey),
+          ),
         Positioned(top: 12, left: 12, child: _buildGamepadStatus()),
       ],
     );

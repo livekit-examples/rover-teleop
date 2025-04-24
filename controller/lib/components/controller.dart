@@ -25,6 +25,8 @@ class _ControllerState extends State<Controller> {
   lk.Participant? _roverParticipant;
   final GamepadService _gamepadService = GamepadService();
   bool _sendingControls = false;
+  bool _sendingAudio = false;
+  lk.LocalAudioTrack? _microphoneTrack;
   Timer? _controlsTimer;
 
   @override
@@ -38,6 +40,7 @@ class _ControllerState extends State<Controller> {
     _disconnectFromLiveKit();
     _listener?.dispose();
     _controlsTimer?.cancel();
+    _stopSendingAudio();
     super.dispose();
   }
 
@@ -73,6 +76,8 @@ class _ControllerState extends State<Controller> {
           _roverVideoTrack = null;
           _roverParticipant = null;
           _sendingControls = false;
+          _sendingAudio = false;
+          _microphoneTrack = null;
         });
         print('Disconnected from room: ${event.reason}');
       });
@@ -159,6 +164,55 @@ class _ControllerState extends State<Controller> {
     _controlsTimer = null;
   }
 
+  Future<void> _startSendingAudio() async {
+    if (_sendingAudio || _room == null || _room!.localParticipant == null)
+      return;
+
+    try {
+      // Create microphone audio track
+      _microphoneTrack = await lk.LocalAudioTrack.create();
+
+      // Publish the audio track to the room
+      await _room!.localParticipant!.publishAudioTrack(_microphoneTrack!);
+
+      setState(() {
+        _sendingAudio = true;
+      });
+
+      print('Started sending audio from microphone');
+    } catch (error) {
+      print('Error starting audio: $error');
+      _stopSendingAudio();
+    }
+  }
+
+  void _stopSendingAudio() {
+    if (!_sendingAudio) return;
+
+    try {
+      if (_microphoneTrack != null) {
+        // Stop the track first
+        _microphoneTrack!.stop();
+
+        // If room is connected, try to unpublish
+        if (_room != null && _room!.localParticipant != null) {
+          // Current version of livekit doesn't need us to manually unpublish
+          // The track will be unpublished when we dispose it
+        }
+
+        // Dispose the track
+        _microphoneTrack!.dispose();
+        _microphoneTrack = null;
+      }
+    } catch (error) {
+      print('Error stopping audio: $error');
+    } finally {
+      setState(() {
+        _sendingAudio = false;
+      });
+    }
+  }
+
   void _sendControls() {
     if (!_sendingControls || _room == null || _room!.localParticipant == null)
       return;
@@ -228,6 +282,7 @@ class _ControllerState extends State<Controller> {
 
   Future<void> _disconnectFromLiveKit() async {
     _stopSendingControlData();
+    _stopSendingAudio();
 
     if (_room != null) {
       await _room!.disconnect();
@@ -287,7 +342,31 @@ class _ControllerState extends State<Controller> {
             ).textTheme.bodyMedium!.copyWith(color: Colors.grey),
           ),
         Positioned(top: 12, left: 12, child: _buildGamepadStatus()),
+        Positioned(top: 12, right: 12, child: _buildAudioControl()),
       ],
+    );
+  }
+
+  Widget _buildAudioControl() {
+    return ElevatedButton(
+      onPressed: _sendingAudio ? _stopSendingAudio : _startSendingAudio,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _sendingAudio ? Colors.red : Colors.green,
+        fixedSize: const Size(130, 36),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_sendingAudio ? Icons.mic : Icons.mic_off, size: 18),
+          const SizedBox(width: 4),
+          Text(
+            _sendingAudio ? "Mute" : "Unmute",
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium!.copyWith(color: Colors.white),
+          ),
+        ],
+      ),
     );
   }
 

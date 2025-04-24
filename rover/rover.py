@@ -69,8 +69,12 @@ async def main(room: rtc.Room):
                 # When steering is 0, both motors get the same value
                 # When steering is to the right (positive), reduce left motor value
                 # When steering is to the left (negative), reduce right motor value
-                left_motor = throttle_scaled + (steering * abs(throttle_scaled))
-                right_motor = throttle_scaled - (steering * abs(throttle_scaled))
+                if throttle_scaled > 0:
+                    left_motor = throttle_scaled + (steering * abs(throttle_scaled))
+                    right_motor = throttle_scaled - (steering * abs(throttle_scaled))
+                else:
+                    left_motor = throttle_scaled - (steering * abs(throttle_scaled))
+                    right_motor = throttle_scaled + (steering * abs(throttle_scaled))
                 
                 # Ensure values stay within the valid range [-0.5, 0.5]
                 left_motor = max(min(left_motor, 0.5), -0.5)

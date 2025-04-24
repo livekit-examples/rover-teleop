@@ -280,7 +280,11 @@ class _ControllerState extends State<Controller> {
           _buildRoverVideoView()
         else
           const Text("Waiting for rover-cam video..."),
-        _buildGamepadStatus(),
+        Positioned(
+          top: 12,
+          left: 12,
+          child: _buildGamepadStatus(),
+        ),
       ],
     );
   }
@@ -289,40 +293,19 @@ class _ControllerState extends State<Controller> {
     return ValueListenableBuilder<bool>(
       valueListenable: _gamepadService.isGamepadConnected,
       builder: (context, isConnected, child) {
-        return Container(
-          padding: const EdgeInsets.all(8.0),
-          margin: const EdgeInsets.symmetric(vertical: 8.0),
-          decoration: BoxDecoration(
-            color: isConnected ? Colors.green.withAlpha(50) : Colors.red.withAlpha(50),
-            borderRadius: BorderRadius.circular(8.0),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isConnected ? Icons.gamepad : Icons.videogame_asset_off,
-                color: isConnected ? Colors.green : Colors.red,
-              ),
-              const SizedBox(width: 8.0),
-              Text(
-                isConnected ? "Gamepad Connected" : "No Gamepad Connected",
-                style: TextStyle(
-                  color: isConnected ? Colors.green : Colors.red,
-                  fontWeight: FontWeight.bold,
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (isConnected && _roverVideoTrack != null) ...[
+              ElevatedButton(
+                onPressed: _sendingControls ? _stopSendingControlData : _startSendingControlData,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _sendingControls ? Colors.red : Colors.green,
                 ),
+                child: Text(_sendingControls ? "Stop Teleop" : "Start Teleop", style: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Colors.white),),
               ),
-              if (isConnected && _roverVideoTrack != null) ...[
-                const SizedBox(width: 16.0),
-                ElevatedButton(
-                  onPressed: _sendingControls ? _stopSendingControlData : _startSendingControlData,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _sendingControls ? Colors.red : Colors.green,
-                  ),
-                  child: Text(_sendingControls ? "Stop Controlling" : "Start Controlling"),
-                ),
-              ],
             ],
-          ),
+          ],
         );
       },
     );
@@ -338,38 +321,6 @@ class _ControllerState extends State<Controller> {
             _roverVideoTrack!,
           ),
         ),
-        // Add a visual indicator of control inputs if sending controls
-        if (_sendingControls)
-          ValueListenableBuilder<Map<String, dynamic>>(
-            valueListenable: _gamepadService.controllerValues,
-            builder: (context, values, child) {
-              return Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Text(
-                      'Left stick: (${values['leftStickX'].toStringAsFixed(2)}, ${values['leftStickY'].toStringAsFixed(2)})',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      'Right stick: (${values['rightStickX'].toStringAsFixed(2)}, ${values['rightStickY'].toStringAsFixed(2)})',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildButtonIndicator('A', values['buttonA']),
-                        _buildButtonIndicator('B', values['buttonB']),
-                        _buildButtonIndicator('X', values['buttonX']),
-                        _buildButtonIndicator('Y', values['buttonY']),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
-          ),
       ],
     );
   }

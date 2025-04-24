@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 from livekit import api
 
 # Load environment variables from .env file
-load_dotenv("../.env")
+load_dotenv()
 
 # Get LiveKit credentials from environment variables
 LIVEKIT_API_KEY = os.environ.get("LIVEKIT_API_KEY")

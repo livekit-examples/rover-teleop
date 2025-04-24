@@ -8,7 +8,7 @@ from signal import SIGINT, SIGTERM
 from livekit import rtc
 from auth import generate_token
 
-load_dotenv("../.env")
+load_dotenv()
 # ensure LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET are set in your .env file
 LIVEKIT_URL = os.environ.get("LIVEKIT_URL")
 ROOM_NAME = os.environ.get("ROOM_NAME")
@@ -43,33 +43,52 @@ async def main(room: rtc.Room):
         try:
             # Decode and parse the data
             decoded_data = data.data.decode('utf-8')
-            logger.info("Data received: %s", decoded_data)
             
             # Try to parse as JSON
             json_data = json.loads(decoded_data)
             
-            # Check if we have the expected thumbstick values
-            if all(k in json_data for k in ["left_x", "left_y", "right_x", "right_y"]):
-                # Map left_y and right_y to a range of -0.5 to 0.5
-                # Gamepad values are typically in range [-1, 1]
-                left_y = float(json_data['left_y'])
-                right_y = float(json_data['right_y'])  # Note: Using right_x as that's often the throttle
+            # First validate that data is of type 'gamepad'
+            if not json_data.get('type') == 'gamepad':
+                logger.info("Received data is not of type 'gamepad', ignoring")
+                return
                 
-                # Scale to [-0.5, 0.5] range
-                # No need to scale if already in [-1, 1] range, just multiply by 0.5
-                left_y_scaled = -1 * round(left_y * 0.5, 3)
-                right_y_scaled = -1 * round(right_y * 0.5, 3)
+            # Get the gamepad data
+            gamepad_data = json_data.get('data', {})
+            
+            # Check if we have the expected thumbstick values
+            if all(k in gamepad_data for k in ["left_x", "left_y", "right_x", "right_y"]):
+                # Get the throttle (left_y) and steering (right_x) values
+                # Gamepad values are typically in range [-1, 1]
+                throttle = float(gamepad_data['left_y'])
+                steering = float(gamepad_data['right_x'])
+                
+                # Scale throttle to [-0.5, 0.5] range
+                throttle_scaled = round(throttle * 0.5, 3)
+                
+                # Calculate left and right motor values based on throttle and steering
+                # When steering is 0, both motors get the same value
+                # When steering is to the right (positive), reduce left motor value
+                # When steering is to the left (negative), reduce right motor value
+                left_motor = throttle_scaled + (steering * abs(throttle_scaled))
+                right_motor = throttle_scaled - (steering * abs(throttle_scaled))
+                
+                # Ensure values stay within the valid range [-0.5, 0.5]
+                left_motor = max(min(left_motor, 0.5), -0.5)
+                right_motor = max(min(right_motor, 0.5), -0.5)
+                
+                # Round to 3 decimal places
+                left_motor = round(left_motor, 3)
+                right_motor = round(right_motor, 3)
                 
                 # Create command JSON as specified
                 command_data = {
                     "T": 1,  # Type 1 for motor control
-                    "L": left_y_scaled,
-                    "R": right_y_scaled
+                    "L": left_motor,
+                    "R": right_motor
                 }
-                
+                print(f"command_data: {command_data}")
                 # Convert to JSON string
                 command_json = json.dumps(command_data)
-                logger.info(f"Formatted command: {command_json}")
                 
                 # Forward to serial port if connection is available
                 if ser and ser.is_open:

@@ -1,16 +1,38 @@
-# controller
+# Rover Teleop Controller
 
-A new Flutter project.
+This Flutter application connects to a LiveKit server to control and view a rover's camera feed.
 
-## Getting Started
+## Setup
 
-This project is a starting point for a Flutter application.
+1. Create a `.env` file in the root directory with the following variables:
 
-A few resources to get you started if this is your first Flutter project:
+```
+LIVEKIT_URL=wss://your-livekit-server.com
+LIVEKIT_TOKEN=your-livekit-token
+LIVEKIT_ROOM=your-room-name
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+2. Install dependencies:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+```bash
+flutter pub get
+```
+
+3. Run the application:
+
+```bash
+flutter run
+```
+
+## Usage
+
+The app will automatically connect to the LiveKit server using the credentials from the `.env` file.
+
+- The main screen displays the rover camera feed when connected
+- Tap the settings icon in the app bar to access the configuration screen
+- The configuration screen allows you to modify connection parameters
+
+## Requirements
+
+- Flutter 3.7.2 or higher
+- A valid LiveKit server and token

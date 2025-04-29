@@ -5,7 +5,7 @@ After=network.target
 [Service]
 ExecStart=/bin/bash /home/dc/rover-teleop/rover/cam_gstreamer.sh
 Restart=on-failure
-User=pi
+User=dc
 WorkingDirectory=/home/dc/rover-teleop
 
 [Install]

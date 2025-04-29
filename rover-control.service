@@ -5,7 +5,7 @@ After=network.target
 [Service]
 ExecStart=/home/dc/rover-teleop/rover/rover.py
 Restart=on-failure
-User=pi
+User=dc
 WorkingDirectory=/home/dc/rover-teleop
 EnvironmentFile=/home/dc/rover-teleop/rover/.env
 

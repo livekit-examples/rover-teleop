@@ -6,7 +6,7 @@ Requires=rover-cam-gstreamer.service
 [Service]
 ExecStart=/bin/bash /home/dc/rover-teleop/rover/cam_publish.sh
 Restart=on-failure
-User=pi
+User=dc
 WorkingDirectory=/home/dc/rover-teleop
 EnvironmentFile=/home/dc/rover-teleop/.env
 Environment="PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:/home/pi/.local/bin"

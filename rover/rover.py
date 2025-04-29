@@ -1,8 +1,12 @@
-# requires: livekit
-# requires: livekit_api
-# requires: pyserial
-# requires: python-dotenv
-# requires: asyncio
+# /// script
+# dependencies = [
+#   "livekit",
+#   "livekit_api",
+#   "pyserial",
+#   "python-dotenv",
+#   "asyncio",
+# ]
+# ///
 
 import os
 import logging

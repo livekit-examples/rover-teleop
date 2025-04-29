@@ -1,3 +1,9 @@
+# requires: livekit
+# requires: livekit_api
+# requires: pyserial
+# requires: python-dotenv
+# requires: asyncio
+
 import os
 import logging
 import asyncio

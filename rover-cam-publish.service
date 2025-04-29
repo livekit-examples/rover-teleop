@@ -4,11 +4,11 @@ After=network.target rover-cam-gstreamer.service
 Requires=rover-cam-gstreamer.service
 
 [Service]
-ExecStart=/bin/bash /home/pi/rover-teleop/rover/cam_publish.sh
+ExecStart=/bin/bash /home/dc/rover-teleop/rover/cam_publish.sh
 Restart=on-failure
 User=pi
-WorkingDirectory=/home/pi/rover-teleop
-EnvironmentFile=/home/pi/rover-teleop/.env
+WorkingDirectory=/home/dc/rover-teleop
+EnvironmentFile=/home/dc/rover-teleop/.env
 Environment="PATH=/usr/local/bin:/usr/bin:/bin:/usr/local/sbin:/usr/sbin:/sbin:/home/pi/.local/bin"
 
 [Install]

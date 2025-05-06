@@ -16,7 +16,7 @@ import json
 import serial
 from dotenv import load_dotenv
 from signal import SIGINT, SIGTERM
-from livekit import rtc, RoomOptions
+from livekit import rtc
 from auth import generate_token
 
 load_dotenv()
@@ -122,7 +122,7 @@ async def main(room: rtc.Room):
             logger.error(f"Error processing data: {e}")
 
     token = generate_token(ROOM_NAME, "rover", "Rover Receiver")
-    await room.connect(LIVEKIT_URL, token, RoomOptions(auto_subscribe=False))
+    await room.connect(LIVEKIT_URL, token, rtc.RoomOptions(auto_subscribe=False))
     logger.info("Connected to room %s", room.name)
 
     if not ser:

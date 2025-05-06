@@ -115,7 +115,7 @@ Install other dependencies that the rover apps require:
    LIVEKIT_URL=<your LiveKit server URL>
    LIVEKIT_API_KEY=<your API Key>
    LIVEKIT_API_SECRET=<your API Secret>
-   LIVEKIT_CONTROLLER_TOKEN=<You don't need this token just yet>
+   LIVEKIT_CONTROLLER_TOKEN=<Token for the teleop controller app>
    ROOM_NAME=<your room name>
    ROVER_PORT=/dev/serial0
    ```
@@ -160,7 +160,59 @@ sudo journalctl -u rover-cam-publish.service
 sudo journalctl -u rover-control.service
 ```
 
+## Rover Teleop Controller
+
+This Flutter application connects to a LiveKit server to control and view a rover's camera feed.
+
+### Setup
+
+1. Create a copy of your `.env` file in the `controller` directory:
+
+```
+cp /home/pi/rover-teleop/rover/.env /home/pi/rover-teleop/controller/.env
+```
+
+2. Change to the controller directory:
+
+```
+cd controller
+```
+
+3. Install dependencies:
+
+```bash
+flutter pub get
+```
+
+4. Run the application:
+
+```bash
+flutter run -d macos
+```
+
+### Usage
+When the app is running, you will see the video from your rover.
+
 ![image](https://github.com/user-attachments/assets/928cb096-c130-49b2-80d9-0584f37b33b1)
+
+The app will automatically connect to the LiveKit server using the credentials from the `.env` file.
+
+- The main screen displays the rover camera feed when connected
+- Tap the `Start/Stop` button on the top left to enable/disable tele-op.
+- Tap the `Mute/Unmute` button on the top right to enable/disable streaming audio from local microphone. This is not used for anything currently.
+
+### Requirements
+
+- Flutter 3.7.2 or higher
+- A valid LiveKit server and token
+- A connected gamepad.  It can usb or Bluetooth.  XBox or Playstation controllers work great.
+
+### Notes
+- This app has only been tested on MacOS, but it should work on iOS, Android, Windows without any issues.
+
+## Performance
+
+The roundtrip glass-to-glass latency can be measured by pointing the rover at a clock on the same screen displaying the rover video stream.  By taking a screenshot, we can calculate the latency.
 
 ![image](https://github.com/user-attachments/assets/7059c73b-da3a-4b8f-b467-13c104cb60b0)
 

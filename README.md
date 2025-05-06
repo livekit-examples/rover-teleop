@@ -159,3 +159,8 @@ sudo journalctl -u rover-cam-gstreamer.service
 sudo journalctl -u rover-cam-publish.service
 sudo journalctl -u rover-control.service
 ```
+
+![image](https://github.com/user-attachments/assets/928cb096-c130-49b2-80d9-0584f37b33b1)
+
+![image](https://github.com/user-attachments/assets/7059c73b-da3a-4b8f-b467-13c104cb60b0)
+

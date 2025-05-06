@@ -1,6 +1,7 @@
 # Raspberry Pi Rover Teleop
+![image](https://github.com/user-attachments/assets/cba39d62-a6be-4e29-939c-c5fb1ac55f4d)
 
-This project demostrates using LiveKit to enable tele-operation of a robot rover.  This repo includes the source code that runs on the rover for streaming realtime video to LiveKit and receiving control messages via LiveKit.  It also includes a Flutter app for remote teleop user for controlling the rover with a gamepad.
+This project demostrates building a high performance robot tele-op system using LiveKit that enables < 200ms latency video and controls.  Everything needed to build the rover in this project was available off the shelf, costing no more than $200.  The repo includes the source code that runs on the rover for streaming realtime video and receiving control messages via LiveKit.  It also includes a Flutter app for remote teleop user for controlling the rover with a standard gamepad.
 
 ## Rover
 
@@ -200,6 +201,8 @@ The app will automatically connect to the LiveKit server using the credentials f
 - The main screen displays the rover camera feed when connected
 - Tap the `Start/Stop` button on the top left to enable/disable tele-op.
 - Tap the `Mute/Unmute` button on the top right to enable/disable streaming audio from local microphone. This is not used for anything currently.
+- The left thumbstick Y axis controls the throttle on the rover, pushing forward on the stick will cause the rover to drive forward, pulling back will reverse.
+- The right thumbstick X axis controls steering proportionally.
 
 ### Requirements
 

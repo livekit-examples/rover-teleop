@@ -4,10 +4,10 @@ After=network.target rover-cam-gstreamer.service
 Requires=rover-cam-gstreamer.service
 
 [Service]
-ExecStart=/bin/bash /home/dc/rover-teleop/rover/cam_publish.sh
+ExecStart=/bin/bash /home/pi/rover-teleop/rover/cam_publish.sh
 Restart=on-failure
-User=dc
-WorkingDirectory=/home/dc/rover-teleop/rover
+User=
+WorkingDirectory=/home/pi/rover-teleop/rover
 
 [Install]
 WantedBy=multi-user.target

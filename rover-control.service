@@ -3,11 +3,11 @@ Description=Rover Control System
 After=network.target
 
 [Service]
-ExecStart=/home/dc/rover-teleop/rover/rover.py
+ExecStart=/home/pi/rover-teleop/rover/rover.py
 Restart=on-failure
-User=dc
-WorkingDirectory=/home/dc/rover-teleop
-EnvironmentFile=/home/dc/rover-teleop/rover/.env
+User=pi
+WorkingDirectory=/home/pi/rover-teleop
+EnvironmentFile=/home/pi/rover-teleop/rover/.env
 
 [Install]
 WantedBy=multi-user.target 

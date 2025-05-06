@@ -1,33 +1,54 @@
 # Raspberry Pi Rover Teleop
 
-This project demostrates the use of LiveKit in conbination with a low cost robot rover platform running a Raspberry Pi 4B to enable low-latency video streaming from an onboard MIPI camera tele-operated from a desktop app with a bluetooth controller.
+This project demostrates using LiveKit to enable tele-operation of a robot rover.  This repo includes the source code that runs on the rover for streaming realtime video to LiveKit and receiving control messages via LiveKit.  It also includes a Flutter app for remote teleop user for controlling the rover with a gamepad.
 
-## Hardware used
+## Rover
 
-The following is a list of components used in this project:
+The rover is built with all off-the-shelf components costing less than $200 USD.  This does not include the gamepad used by controller app.
 
-1. [Raspberry Pi 4B 8GB](https://www.sparkfun.com/raspberry-pi-4-model-b-8-gb.html?src=raspberrypi) - $75
+1. [Raspberry Pi 4B 8GB](https://www.sparkfun.com/raspberry-pi-4-model-b-8-gb.html) - $75
 2. [Raspberry Pi Camera V2](https://www.amazon.com/Raspberry-Pi-Camera-Module-Megapixel/dp/B01ER2SKFS) - $12
+3. [Waveshare Rover](https://www.amazon.com/Waveshare-Flexible-Expandable-Chassis-Multiple/dp/B0CF55LM6Q) - $99
+4. [3x 18650 batteries](https://www.amazon.com/dp/B0CDRBR2M1) - ~$14
+4. Assorted mounting hardware & jumper cables
 
-## Raspberry Pi OS Setup
+Total cost = $200
 
-Before setting up the rover teleop software, you need to prepare your Raspberry Pi:
+### Rover Hardware Setup
+
+1. Install batteries into rover.
+2. Install the Raspberry Pi onto the mounting bracket.
+3. Install the camera module onto the mounting bracket.
+4. Install the camera/compute bracket onto the rover.
+5. Connect 5V, ground, Uart TX/TX to the rover ESP32.
+
+### Raspberry Pi OS Setup
+
+Before setting up the rover teleop software, you need to prepare your Raspberry Pi.  
 
 1. Install Raspberry Pi OS 64-bit (Bookworm):
-   - Download the Raspberry Pi Imager from [raspberrypi.com/software](https://www.raspberrypi.com/software/)
-   - Use the imager to install Raspberry Pi OS 64-bit (Bookworm) on your SD card
-   - Complete the initial setup process (create user, set timezone, connect to WiFi)
+   - Download the Raspberry Pi Imager from [raspberrypi.com/software](https://www.raspberrypi.com/software/).
+   - Use the imager to install Raspberry Pi OS 64-bit (Bookworm) on your SD card.
+   - Complete the initial setup process (create user, set timezone, connect to WiFi).
+   - This repo assumes you are configuring the Pi to use the default user `pi`.
 
 2. Enable required interfaces:
+   Power up the Pi connected to a monitor, keyboard, and mouse to continue the setup.  It should boot directly into a GUI desktop environment.
+
    ```
    sudo raspi-config
    ```
    - Navigate to "Interface Options"
-   - Enable UART
+   - Enable SSH
+   - Enable Serial port - but do not enable login shell on serial port.
    - Enable I2C
    - Enable SPI
-   - Enable Camera
    - Reboot when prompted or run `sudo reboot`
+
+3. Disable booting into GUI interface
+   ```
+   sudo systemctl set-default multi-user.target
+   ```
 
 3. Set up the Raspberry Pi Camera v2:
    - Connect the camera module to the Raspberry Pi's camera port
@@ -35,68 +56,81 @@ Before setting up the rover teleop software, you need to prepare your Raspberry 
    ```
    sudo nano /boot/firmware/config.txt
    ```
-   - Add these lines at the end of the file:
+   - Comment out the line that says:
    ```
-   # Enable camera
-   dtoverlay=imx219
-   start_x=1
-   gpu_mem=128
+   camera_auto_detect=1
    ```
-   - Save and exit (Ctrl+X, then Y, then Enter)
-   - Reboot the Raspberry Pi:
+   - Add the following line:
    ```
-   sudo reboot
+   dtoverlay=imx219,rotation=0
    ```
+   - Save and reboot
 
 4. Verify the camera is working:
    ```
-   libcamera-hello --timeout 5000
+   cam -l
    ```
-   - You should see the camera feed for 5 seconds
-   - If not working, check connections and run `vcgencmd get_camera` to verify detection
+   - You should see the detected camera listed
 
-## Setup Instructions
+At this point, you should be able to ssh into the pi and do everything remotely.
+
+### Install Dependencies
+
+Install other dependencies that the rover apps require:
+
+1. Install uv (modern Python package manager):
+   ```
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+
+2. Install Gstreamer
+   ```
+   sudo apt install -y gstreamer1.0-libcamera gstreamer1.0-tools \
+   gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
+   gstreamer1.0-plugins-ugly   gstreamer1.0-libav   gstreamer1.0-alsa
+   ```
+
+3. Install the LiveKit CLI
+   ```
+   curl -sSL https://get.livekit.io/cli | bash
+   ```
+
+### Rover App Setup
 
 1. Clone this repository to your Raspberry Pi:
    ```
-   git clone https://github.com/livekit-examples/rover-teleop-services.git
-   cd rover-teleop-services
+   cd ~
+   git clone https://github.com/livekit-examples/rover-teleop.git
+   cd rover-teleop
    ```
 
-2. Make the installation script executable:
+4. Copy `env.example` to `.env` and fill with your actual credentials:
    ```
-   chmod +x install-services.sh
+   cp /home/pi/rover-teleop/env.example /home/pi/rover-teleop/rover/.env
+   nano /home/pi/rover-teleop/rover/.env
    ```
 
-3. Run the installation script (requires sudo):
+   Add your actual values for:
+   ```
+   LIVEKIT_URL=<your LiveKit server URL>
+   LIVEKIT_API_KEY=<your API Key>
+   LIVEKIT_API_SECRET=<your API Secret>
+   LIVEKIT_CONTROLLER_TOKEN=<You don't need this token just yet>
+   ROOM_NAME=<your room name>
+   ROVER_PORT=/dev/serial0
+   ```
+
+3. Run the installation script to create systemd services:
    ```
    sudo ./install-services.sh
    ```
 
    This script will:
-   - Clone the rover-teleop repository to `/home/pi/rover-teleop` if it doesn't exist
-   - Install uv (modern Python package manager) if not already installed
-   - Install Python dependencies using uv
-   - Create a template `.env` file if it doesn't exist
-   - Install the LiveKit CLI if it's not already installed
    - Install the systemd service files
    - Enable the services to start at boot
 
-4. Edit the `.env` file with your actual credentials:
-   ```
-   sudo nano /home/pi/rover-teleop/.env
-   ```
 
-   Add your actual values for:
-   ```
-   LIVEKIT_API_KEY=your_api_key
-   LIVEKIT_API_SECRET=your_api_secret
-   LIVEKIT_URL=your_livekit_url
-   ROOM_NAME=your_room_name
-   ROVER_PORT=/dev/ttyUSB0  # Adjust based on your rover's serial port
-   ```
-
-## Service Management
+### Service Management
 
 Start services:
 ```
@@ -137,17 +171,7 @@ If you prefer to set up the environment manually:
    rm -rf examples
    ```
 
-2. Install uv (modern Python package manager):
-   ```
-   curl -sSf https://raw.githubusercontent.com/astral-sh/uv/main/install.sh | bash
-   ```
 
-3. Install Python dependencies with uv:
-   ```
-   cd ~/rover-teleop
-   uv pip install -r rover/requirement.txt
-   uv pip install python-dotenv livekit
-   ```
 
 4. Install LiveKit CLI:
    ```

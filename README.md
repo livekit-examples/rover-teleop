@@ -215,7 +215,11 @@ The app will automatically connect to the LiveKit server using the credentials f
 
 ## Performance
 
-The roundtrip glass-to-glass latency can be measured by pointing the rover at a clock on the same screen displaying the rover video stream.  By taking a screenshot, we can calculate the latency.
+The roundtrip glass-to-glass latency can be measured by pointing the rover at a clock on the same screen displaying the rover video stream.  Rover and controller were both connected to LiveKit Cloud.  By taking a screenshot, we can calculate the latency is approximately 190ms.
 
 ![image](https://github.com/user-attachments/assets/7059c73b-da3a-4b8f-b467-13c104cb60b0)
+
+## Notes
+- To further reduce latency, we can add WIFI 6/7 capable radio to rover (-10ms) and move controller laptop to ethernet (-20-30ms).
+
 

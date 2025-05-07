@@ -15,6 +15,10 @@ The rover is built with all off-the-shelf components costing less than $200 USD.
 
 Total cost = $200
 
+### LiveKit Account
+
+You will need a API key for LiveKit cloud or host your own LiveKit server to run this demo.  Get a free account at [https://cloud.livekit.io](https://cloud.livekit.io).
+
 ### Rover Hardware Setup
 
 1. Install batteries into rover.

@@ -1,6 +1,7 @@
 # Raspberry Pi Rover Teleop
+![image](https://github.com/user-attachments/assets/cba39d62-a6be-4e29-939c-c5fb1ac55f4d)
 
-This project demostrates using LiveKit to enable tele-operation of a robot rover.  This repo includes the source code that runs on the rover for streaming realtime video to LiveKit and receiving control messages via LiveKit.  It also includes a Flutter app for remote teleop user for controlling the rover with a gamepad.
+This project demostrates building a high performance robot tele-op system using LiveKit that enables < *200ms* latency video and controls.  Everything needed to build the rover in this project was available off the shelf, costing no more than $200.  The repo includes the source code that runs on the rover for streaming realtime video and receiving control messages via LiveKit.  It also includes a Flutter app for remote teleop user for controlling the rover with a standard gamepad.
 
 ## Rover
 
@@ -13,6 +14,10 @@ The rover is built with all off-the-shelf components costing less than $200 USD.
 4. Assorted mounting hardware & jumper cables
 
 Total cost = $200
+
+### LiveKit Account
+
+You will need a API key for LiveKit cloud or host your own LiveKit server to run this demo.  Get a free account at [https://cloud.livekit.io](https://cloud.livekit.io).
 
 ### Rover Hardware Setup
 
@@ -200,6 +205,8 @@ The app will automatically connect to the LiveKit server using the credentials f
 - The main screen displays the rover camera feed when connected
 - Tap the `Start/Stop` button on the top left to enable/disable tele-op.
 - Tap the `Mute/Unmute` button on the top right to enable/disable streaming audio from local microphone. This is not used for anything currently.
+- The left thumbstick Y axis controls the throttle on the rover, pushing forward on the stick will cause the rover to drive forward, pulling back will reverse.
+- The right thumbstick X axis controls steering proportionally.
 
 ### Requirements
 
@@ -212,7 +219,11 @@ The app will automatically connect to the LiveKit server using the credentials f
 
 ## Performance
 
-The roundtrip glass-to-glass latency can be measured by pointing the rover at a clock on the same screen displaying the rover video stream.  By taking a screenshot, we can calculate the latency.
+The roundtrip glass-to-glass latency can be measured by pointing the rover at a clock on the same screen displaying the rover video stream.  Rover and controller were both connected to LiveKit Cloud.  By taking a screenshot, we can calculate the latency is approximately 190ms.
 
 ![image](https://github.com/user-attachments/assets/7059c73b-da3a-4b8f-b467-13c104cb60b0)
+
+## Notes
+- To further reduce latency, we can add WIFI 6/7 capable radio to rover (-10ms) and move controller laptop to ethernet (-20-30ms).
+
 

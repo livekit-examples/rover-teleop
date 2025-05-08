@@ -4,4 +4,4 @@ gst-launch-1.0 -v libcamerasrc ! \
     v4l2h264enc extra-controls="controls,repeat_sequence_header=1" ! 'video/x-h264,level=(string)4,profile=baseline' ! \
     h264parse config-interval=1 ! \
     queue max-size-buffers=1 max-size-time=0 max-size-bytes=0 ! \
-    tcpserversink host=127.0.0.1 port=5004 sync=false async=false
+    tcpserversink host=0.0.0.0 port=5004 sync=false async=false

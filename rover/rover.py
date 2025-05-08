@@ -35,8 +35,7 @@ async def read_serial_data(ser: serial.Serial, logger: logging.Logger):
             line = ser.readline().decode('utf-8').strip()
             try:
                 data = json.loads(line)
-                if data.get('T') == 126:  # IMU data response
-                    print(f"Raw IMU data: {data}")  # Print raw data to see its structure
+                print(f"Raw IMU data: {data}")  # Print raw data to see its structure
             except json.JSONDecodeError:
                 logger.warning(f"Failed to parse JSON from serial: {line}")
     except Exception as e:

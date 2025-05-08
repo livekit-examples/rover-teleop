@@ -76,16 +76,21 @@ async def main(room: rtc.Room):
                 # Scale throttle to [-0.5, 0.5] range
                 throttle_scaled = round(throttle * 0.5, 3)
                 
+                # Apply Gord_W's formula: y = a * x^3 + (1-a) * x
+                # Using a = 0.7 for a good balance between linear and cubic response
+                a = 0.7
+                steering_curved = a * (steering ** 3) + (1 - a) * steering
+                
                 # Calculate left and right motor values based on throttle and steering
                 # When steering is 0, both motors get the same value
                 # When steering is to the right (positive), reduce left motor value
                 # When steering is to the left (negative), reduce right motor value
                 if throttle_scaled > 0:
-                    left_motor = throttle_scaled + (steering * abs(throttle_scaled))
-                    right_motor = throttle_scaled - (steering * abs(throttle_scaled))
+                    left_motor = throttle_scaled + (steering_curved * abs(throttle_scaled))
+                    right_motor = throttle_scaled - (steering_curved * abs(throttle_scaled))
                 else:
-                    left_motor = throttle_scaled - (steering * abs(throttle_scaled))
-                    right_motor = throttle_scaled + (steering * abs(throttle_scaled))
+                    left_motor = throttle_scaled - (steering_curved * abs(throttle_scaled))
+                    right_motor = throttle_scaled + (steering_curved * abs(throttle_scaled))
                 
                 # Ensure values stay within the valid range [-0.5, 0.5]
                 left_motor = max(min(left_motor, 0.5), -0.5)

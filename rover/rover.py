@@ -25,6 +25,35 @@ LIVEKIT_URL = os.environ.get("LIVEKIT_URL")
 ROOM_NAME = os.environ.get("ROOM_NAME")
 ROVER_PORT = os.environ.get("ROVER_PORT")
 
+async def read_serial_data(ser: serial.Serial, logger: logging.Logger):
+    """Read and parse data from serial port."""
+    if not ser or not ser.is_open:
+        return
+    
+    try:
+        if ser.in_waiting:
+            line = ser.readline().decode('utf-8').strip()
+            try:
+                data = json.loads(line)
+                if data.get('T') == 126:  # IMU data response
+                    print(f"Raw IMU data: {data}")  # Print raw data to see its structure
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse JSON from serial: {line}")
+    except Exception as e:
+        logger.error(f"Error reading serial data: {e}")
+
+async def send_imu_query(ser: serial.Serial, logger: logging.Logger):
+    """Send IMU query command to serial port."""
+    if not ser or not ser.is_open:
+        return
+    
+    try:
+        command = {"T": 126}
+        command_json = json.dumps(command) + "\n"
+        ser.write(command_json.encode())
+    except Exception as e:
+        logger.error(f"Error sending IMU query: {e}")
+
 async def main(room: rtc.Room):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
@@ -46,6 +75,23 @@ async def main(room: rtc.Room):
         logger.warning(f"Failed to connect to serial port: {e}")
         logger.info("Continuing without serial connection - will only log received data")
         ser = None
+
+    # Start periodic IMU query task
+    async def periodic_imu_query():
+        while True:
+            await send_imu_query(ser, logger)
+            await asyncio.sleep(0.1)  # 10Hz = 0.1 seconds
+
+    # Start periodic serial data reading task
+    async def periodic_serial_read():
+        while True:
+            await read_serial_data(ser, logger)
+            await asyncio.sleep(0.01)  # Read at 100Hz to ensure we don't miss data
+
+    # Start the periodic tasks if we have a serial connection
+    if ser and ser.is_open:
+        asyncio.create_task(periodic_imu_query())
+        asyncio.create_task(periodic_serial_read())
 
     # handler for receiving data packet
     @room.on("data_received")
@@ -78,10 +124,10 @@ async def main(room: rtc.Room):
                 
                 # Apply Gord_W's formula: y = a * x^3 + (1-a) * x
                 # Using a = 0.7 for a good balance between linear and cubic response
-                a = 0.7
+                a = 0.6
                 steering_curved = a * (steering ** 3) + (1 - a) * steering
                 
-                # Calculate left and right motor values based on throttle and steering
+                # Calculate left and right motor values based on throttle and steeringß
                 # When steering is 0, both motors get the same value
                 # When steering is to the right (positive), reduce left motor value
                 # When steering is to the left (negative), reduce right motor value

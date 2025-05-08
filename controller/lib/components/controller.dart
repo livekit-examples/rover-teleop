@@ -245,7 +245,11 @@ class _ControllerState extends State<Controller> {
       final dataBytes = utf8.encode(jsonString);
 
       // Send the control data as a List<int>
-      _room!.localParticipant!.publishData(dataBytes, topic: 'controls');
+      _room!.localParticipant!.publishData(
+        dataBytes,
+        topic: 'controls',
+        reliable: false,
+      );
 
       print('Sent control data: $jsonString');
     } catch (e) {

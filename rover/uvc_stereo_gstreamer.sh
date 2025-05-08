@@ -1,4 +1,4 @@
-gst-launch-1.0 -v v4l2src device=/dev/video0 io-mode=2 ! \
+gst-launch-1.0 -v v4l2src device=/dev/video2 io-mode=2 ! \
     video/x-raw,format=YUY2,width=1600,height=600,framerate=30/1,colorimetry=2:4:16:1 !  \
     videoconvert ! video/x-raw,format=NV12 ! \
     v4l2h264enc extra-controls="controls,repeat_sequence_header=1" ! \

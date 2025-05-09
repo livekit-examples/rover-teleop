@@ -71,7 +71,8 @@ async def read_serial_data(ser: serial.Serial, logger: logging.Logger, room: rtc
                         try:
                             await room.local_participant.publish_data(
                                 json.dumps(imu_data).encode(),
-                                topic="imu"
+                                topic="imu",
+                                reliable=False
                             )
                         except Exception as e:
                             logger.error(f"Failed to publish IMU data: {e}")

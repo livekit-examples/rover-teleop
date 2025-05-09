@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:livekit_client/livekit_client.dart' as lk;
 import 'package:rover_controller/services/gamepad_service.dart';
+import 'package:fl_chart/fl_chart.dart';
 
 class Controller extends StatefulWidget {
   final String url;
@@ -29,6 +30,29 @@ class _ControllerState extends State<Controller> {
   lk.LocalAudioTrack? _microphoneTrack;
   Timer? _controlsTimer;
 
+  // IMU data storage
+  final List<FlSpot> _accelXSpots = [];
+  final List<FlSpot> _accelYSpots = [];
+  final List<FlSpot> _accelZSpots = [];
+  final List<FlSpot> _gyroXSpots = [];
+  final List<FlSpot> _gyroYSpots = [];
+  final List<FlSpot> _gyroZSpots = [];
+  final List<FlSpot> _rollSpots = [];
+  final List<FlSpot> _pitchSpots = [];
+  final List<FlSpot> _yawSpots = [];
+  double _maxAccelValue = 0.0;
+  double _maxGyroValue = 0.0;
+  double _maxOrientValue = 0.0;
+  double _temperature = 0.0;
+  static const int _maxDataPoints = 50; // Keep last 50 data points
+  static const double _minYRange =
+      1000.0; // Minimum Y-axis range for accelerometer
+  static const double _minGyroRange =
+      100.0; // Minimum Y-axis range for gyroscope
+  static const double _minOrientRange =
+      90.0; // Minimum Y-axis range for orientation
+  static const double _timeWindow = 5.0; // Show last 5 seconds of data
+
   @override
   void initState() {
     super.initState();
@@ -42,6 +66,70 @@ class _ControllerState extends State<Controller> {
     _controlsTimer?.cancel();
     _stopSendingAudio();
     super.dispose();
+  }
+
+  void _handleImuData(Map<String, dynamic> data) {
+    if (data['type'] != 'imu') return;
+
+    final accel = data['data']['accel'];
+    final gyro = data['data']['gyro'];
+    final orientation = data['data']['orientation'];
+    final timestamp = DateTime.now().millisecondsSinceEpoch / 1000.0;
+
+    setState(() {
+      // Update temperature
+      _temperature = data['data']['temp'].toDouble();
+
+      // Add new accelerometer data points
+      _accelXSpots.add(FlSpot(timestamp, accel['x'].toDouble()));
+      _accelYSpots.add(FlSpot(timestamp, accel['y'].toDouble()));
+      _accelZSpots.add(FlSpot(timestamp, accel['z'].toDouble()));
+
+      // Add new gyroscope data points
+      _gyroXSpots.add(FlSpot(timestamp, gyro['x'].toDouble()));
+      _gyroYSpots.add(FlSpot(timestamp, gyro['y'].toDouble()));
+      _gyroZSpots.add(FlSpot(timestamp, gyro['z'].toDouble()));
+
+      // Add new orientation data points
+      _rollSpots.add(FlSpot(timestamp, orientation['roll'].toDouble()));
+      _pitchSpots.add(FlSpot(timestamp, orientation['pitch'].toDouble()));
+      _yawSpots.add(FlSpot(timestamp, orientation['yaw'].toDouble()));
+
+      // Update max values for scaling
+      _maxAccelValue = [
+        ..._accelXSpots.map((spot) => spot.y.abs()),
+        ..._accelYSpots.map((spot) => spot.y.abs()),
+        ..._accelZSpots.map((spot) => spot.y.abs()),
+      ].reduce((a, b) => a > b ? a : b);
+      _maxAccelValue = _maxAccelValue.clamp(_minYRange, double.infinity);
+
+      _maxGyroValue = [
+        ..._gyroXSpots.map((spot) => spot.y.abs()),
+        ..._gyroYSpots.map((spot) => spot.y.abs()),
+        ..._gyroZSpots.map((spot) => spot.y.abs()),
+      ].reduce((a, b) => a > b ? a : b);
+      _maxGyroValue = _maxGyroValue.clamp(_minGyroRange, double.infinity);
+
+      _maxOrientValue = [
+        ..._rollSpots.map((spot) => spot.y.abs()),
+        ..._pitchSpots.map((spot) => spot.y.abs()),
+        ..._yawSpots.map((spot) => spot.y.abs()),
+      ].reduce((a, b) => a > b ? a : b);
+      _maxOrientValue = _maxOrientValue.clamp(_minOrientRange, double.infinity);
+
+      // Remove old data points if we exceed the limit
+      if (_accelXSpots.length > _maxDataPoints) {
+        _accelXSpots.removeAt(0);
+        _accelYSpots.removeAt(0);
+        _accelZSpots.removeAt(0);
+        _gyroXSpots.removeAt(0);
+        _gyroYSpots.removeAt(0);
+        _gyroZSpots.removeAt(0);
+        _rollSpots.removeAt(0);
+        _pitchSpots.removeAt(0);
+        _yawSpots.removeAt(0);
+      }
+    });
   }
 
   Future<void> _connectToLiveKit() async {
@@ -123,6 +211,18 @@ class _ControllerState extends State<Controller> {
             _sendingControls = false;
           });
           print('Unsubscribed from rover-cam video track');
+        }
+      });
+
+      // Add data received handler
+      _listener!.on<lk.DataReceivedEvent>((event) {
+        if (event.topic == 'imu') {
+          try {
+            final data = jsonDecode(utf8.decode(event.data));
+            _handleImuData(data);
+          } catch (e) {
+            print('Error parsing IMU data: $e');
+          }
         }
       });
 
@@ -347,6 +447,45 @@ class _ControllerState extends State<Controller> {
           ),
         Positioned(top: 12, left: 12, child: _buildGamepadStatus()),
         Positioned(top: 12, right: 12, child: _buildAudioControl()),
+        Positioned(
+          bottom: 12,
+          right: 12,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              _buildTemperature(),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildSensorGraph(
+                    'Accel (mg)',
+                    _accelXSpots,
+                    _accelYSpots,
+                    _accelZSpots,
+                    _maxAccelValue,
+                  ),
+                  const SizedBox(width: 12),
+                  _buildSensorGraph(
+                    'Gyro (deg/s)',
+                    _gyroXSpots,
+                    _gyroYSpots,
+                    _gyroZSpots,
+                    _maxGyroValue,
+                  ),
+                  const SizedBox(width: 12),
+                  _buildSensorGraph(
+                    'RPY (deg)',
+                    _rollSpots,
+                    _pitchSpots,
+                    _yawSpots,
+                    _maxOrientValue,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -588,6 +727,170 @@ class _ControllerState extends State<Controller> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildSensorGraph(
+    String title,
+    List<FlSpot> xSpots,
+    List<FlSpot> ySpots,
+    List<FlSpot> zSpots,
+    double maxValue,
+  ) {
+    if (xSpots.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch / 1000.0;
+    final minX = now - _timeWindow;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: Theme.of(context).textTheme.displaySmall!.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            width: 180,
+            height: 80,
+            decoration: const BoxDecoration(color: Colors.black54),
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: LineChart(
+                LineChartData(
+                  gridData: const FlGridData(show: false),
+                  titlesData: const FlTitlesData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineTouchData: const LineTouchData(enabled: false),
+                  minX: minX,
+                  maxX: now,
+                  minY: -maxValue * 1.2,
+                  maxY: maxValue * 1.2,
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: xSpots,
+                      isCurved: true,
+                      color: Colors.red,
+                      barWidth: 2,
+                      isStrokeCapRound: true,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(show: false),
+                      preventCurveOverShooting: true,
+                    ),
+                    LineChartBarData(
+                      spots: ySpots,
+                      isCurved: true,
+                      color: Colors.green,
+                      barWidth: 2,
+                      isStrokeCapRound: true,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(show: false),
+                      preventCurveOverShooting: true,
+                    ),
+                    LineChartBarData(
+                      spots: zSpots,
+                      isCurved: true,
+                      color: Colors.blue,
+                      barWidth: 2,
+                      isStrokeCapRound: true,
+                      dotData: const FlDotData(show: false),
+                      belowBarData: BarAreaData(show: false),
+                      preventCurveOverShooting: true,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'X',
+              style: Theme.of(context).textTheme.displaySmall!.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.green,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Y',
+              style: Theme.of(context).textTheme.displaySmall!.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                color: Colors.blue,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Z',
+              style: Theme.of(context).textTheme.displaySmall!.copyWith(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTemperature() {
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: Colors.black54,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.thermostat, color: Colors.white, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            '${_temperature.toStringAsFixed(1)}°C',
+            style: Theme.of(context).textTheme.displaySmall!.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

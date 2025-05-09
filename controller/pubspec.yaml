@@ -38,6 +38,7 @@ dependencies:
   flutter_dotenv: ^5.1.0
   gamepads: ^0.1.5
   google_fonts: ^6.2.1
+  fl_chart: ^0.66.2
 
 dev_dependencies:
   flutter_test:

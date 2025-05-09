@@ -170,8 +170,8 @@ async def main(room: rtc.Room):
                 steering_effect = steering_curved * 0.3  # Scale steering effect
                 
                 # Mix throttle and steering
-                left_motor = throttle_scaled - steering_effect
-                right_motor = throttle_scaled + steering_effect
+                left_motor = throttle_scaled + steering_effect
+                right_motor = throttle_scaled - steering_effect
                 
                 # Ensure values stay within the valid range [-0.5, 0.5]
                 left_motor = max(min(left_motor, 0.5), -0.5)

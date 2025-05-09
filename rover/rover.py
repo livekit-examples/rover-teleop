@@ -25,7 +25,7 @@ LIVEKIT_URL = os.environ.get("LIVEKIT_URL")
 ROOM_NAME = os.environ.get("ROOM_NAME")
 ROVER_PORT = os.environ.get("ROVER_PORT")
 
-async def read_serial_data(ser: serial.Serial, logger: logging.Logger):
+async def read_serial_data(ser: serial.Serial, logger: logging.Logger, room: rtc.Room = None):
     """Read and parse data from serial port."""
     if not ser or not ser.is_open:
         return
@@ -35,7 +35,46 @@ async def read_serial_data(ser: serial.Serial, logger: logging.Logger):
             line = ser.readline().decode('utf-8').strip()
             try:
                 data = json.loads(line)
-                print(f"Raw IMU data: {data}")  # Print raw data to see its structure
+                # Check if this is IMU data (type 1002)
+                if data.get('T') == 1002:
+                    # Parse IMU data
+                    imu_data = {
+                        'type': 'imu',
+                        'data': {
+                            'orientation': {
+                                'roll': data.get('r', 0),    # Roll in degrees
+                                'pitch': data.get('p', 0),   # Pitch in degrees
+                                'yaw': data.get('y', 0)      # Yaw in degrees
+                            },
+                            'accel': {
+                                'x': data.get('ax', 0),      # Accelerometer X in mg
+                                'y': data.get('ay', 0),      # Accelerometer Y in mg
+                                'z': data.get('az', 0)       # Accelerometer Z in mg
+                            },
+                            'gyro': {
+                                'x': data.get('gx', 0),      # Gyroscope X in degrees/s
+                                'y': data.get('gy', 0),      # Gyroscope Y in degrees/s
+                                'z': data.get('gz', 0)       # Gyroscope Z in degrees/s
+                            },
+                            'mag': {
+                                'x': data.get('mx', 0),      # Magnetometer X in uT
+                                'y': data.get('my', 0),      # Magnetometer Y in uT
+                                'z': data.get('mz', 0)       # Magnetometer Z in uT
+                            },
+                            'temp': data.get('temp', 0)      # Temperature in Celsius
+                        }
+                    }
+                    logger.info(f"Parsed IMU data: {imu_data}")
+                    
+                    # Publish IMU data to room if available
+                    if room:
+                        try:
+                            await room.local_participant.publish_data(
+                                json.dumps(imu_data).encode(),
+                                topic="imu"
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to publish IMU data: {e}")
             except json.JSONDecodeError:
                 logger.warning(f"Failed to parse JSON from serial: {line}")
     except Exception as e:
@@ -84,7 +123,7 @@ async def main(room: rtc.Room):
     # Start periodic serial data reading task
     async def periodic_serial_read():
         while True:
-            await read_serial_data(ser, logger)
+            await read_serial_data(ser, logger, room)
             await asyncio.sleep(0.01)  # Read at 100Hz to ensure we don't miss data
 
     # Start the periodic tasks if we have a serial connection

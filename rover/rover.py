@@ -169,6 +169,10 @@ async def main(room: rtc.Room):
                 # Calculate base steering effect (opposing motor commands)
                 steering_effect = steering_curved * 0.3  # Scale steering effect
                 
+                # Invert steering when in reverse
+                if throttle_scaled < 0:
+                    steering_effect = -steering_effect
+                
                 # Mix throttle and steering
                 left_motor = throttle_scaled + steering_effect
                 right_motor = throttle_scaled - steering_effect

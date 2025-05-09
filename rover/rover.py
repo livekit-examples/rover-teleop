@@ -166,16 +166,20 @@ async def main(room: rtc.Room):
                 a = 0.5
                 steering_curved = a * (steering ** 3) + (1 - a) * steering
                 
-                # Calculate left and right motor values based on throttle and steeringß
-                # When steering is 0, both motors get the same value
-                # When steering is to the right (positive), reduce left motor value
-                # When steering is to the left (negative), reduce right motor value
-                if throttle_scaled > 0:
-                    left_motor = throttle_scaled + (steering_curved * abs(throttle_scaled))
-                    right_motor = throttle_scaled - (steering_curved * abs(throttle_scaled))
+                # Calculate motor values
+                if abs(throttle_scaled) < 0.05:  # If throttle is near zero
+                    # In-place rotation mode
+                    rotation_speed = 0.3  # Base rotation speed
+                    left_motor = -steering_curved * rotation_speed
+                    right_motor = steering_curved * rotation_speed
                 else:
-                    left_motor = throttle_scaled - (steering_curved * abs(throttle_scaled))
-                    right_motor = throttle_scaled + (steering_curved * abs(throttle_scaled))
+                    # Normal driving mode with steering
+                    if throttle_scaled > 0:
+                        left_motor = throttle_scaled + (steering_curved * abs(throttle_scaled))
+                        right_motor = throttle_scaled - (steering_curved * abs(throttle_scaled))
+                    else:
+                        left_motor = throttle_scaled - (steering_curved * abs(throttle_scaled))
+                        right_motor = throttle_scaled + (steering_curved * abs(throttle_scaled))
                 
                 # Ensure values stay within the valid range [-0.5, 0.5]
                 left_motor = max(min(left_motor, 0.5), -0.5)

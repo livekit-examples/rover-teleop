@@ -162,24 +162,16 @@ async def main(room: rtc.Room):
                 throttle_scaled = round(throttle * 0.5, 3)
                 
                 # Apply Gord_W's formula: y = a * x^3 + (1-a) * x
-                # Using a = 0.7 for a good balance between linear and cubic response
+                # Using a = 0.5 for a good balance between linear and cubic response
                 a = 0.5
                 steering_curved = a * (steering ** 3) + (1 - a) * steering
                 
-                # Calculate motor values
-                if abs(throttle_scaled) < 0.05:  # If throttle is near zero
-                    # In-place rotation mode
-                    rotation_speed = 0.3  # Base rotation speed
-                    left_motor = -steering_curved * rotation_speed
-                    right_motor = steering_curved * rotation_speed
-                else:
-                    # Normal driving mode with steering
-                    if throttle_scaled > 0:
-                        left_motor = throttle_scaled + (steering_curved * abs(throttle_scaled))
-                        right_motor = throttle_scaled - (steering_curved * abs(throttle_scaled))
-                    else:
-                        left_motor = throttle_scaled - (steering_curved * abs(throttle_scaled))
-                        right_motor = throttle_scaled + (steering_curved * abs(throttle_scaled))
+                # Calculate base steering effect (opposing motor commands)
+                steering_effect = steering_curved * 0.3  # Scale steering effect
+                
+                # Mix throttle and steering
+                left_motor = throttle_scaled - steering_effect
+                right_motor = throttle_scaled + steering_effect
                 
                 # Ensure values stay within the valid range [-0.5, 0.5]
                 left_motor = max(min(left_motor, 0.5), -0.5)

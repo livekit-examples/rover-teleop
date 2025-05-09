@@ -67,7 +67,7 @@ async def read_serial_data(ser: serial.Serial, logger: logging.Logger, room: rtc
                     logger.info(f"Parsed IMU data: {imu_data}")
                     
                     # Publish IMU data to room if available
-                    if room:
+                    if room and room.isconnected:
                         try:
                             await room.local_participant.publish_data(
                                 json.dumps(imu_data).encode(),
@@ -163,7 +163,7 @@ async def main(room: rtc.Room):
                 
                 # Apply Gord_W's formula: y = a * x^3 + (1-a) * x
                 # Using a = 0.7 for a good balance between linear and cubic response
-                a = 0.6
+                a = 0.5
                 steering_curved = a * (steering ** 3) + (1 - a) * steering
                 
                 # Calculate left and right motor values based on throttle and steeringß

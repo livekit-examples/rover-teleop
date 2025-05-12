@@ -73,9 +73,9 @@ Before setting up the rover teleop software, you need to prepare your Raspberry 
 
 4. Verify the camera is working:
    ```
-   cam -l
+   rpicam-hello
    ```
-   - You should see the detected camera listed
+   - You should see the detected camera image displayed
 
 At this point, you should be able to ssh into the pi and do everything remotely.
 

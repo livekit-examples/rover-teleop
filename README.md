@@ -87,15 +87,18 @@ Install other dependencies that the rover apps require:
    ```
    curl -LsSf https://astral.sh/uv/install.sh | sh
    ```
-
-2. Install Gstreamer
+2. Install other dependencies
+   ```
+   sudo apt install -y git
+   ```
+3. Install Gstreamer
    ```
    sudo apt install -y gstreamer1.0-libcamera gstreamer1.0-tools \
    gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad \
    gstreamer1.0-plugins-ugly   gstreamer1.0-libav   gstreamer1.0-alsa
    ```
 
-3. Install the LiveKit CLI
+4. Install the LiveKit CLI
    ```
    curl -sSL https://get.livekit.io/cli | bash
    ```

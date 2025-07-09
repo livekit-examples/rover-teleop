@@ -25,6 +25,9 @@ LIVEKIT_URL = os.environ.get("LIVEKIT_URL")
 ROOM_NAME = os.environ.get("ROOM_NAME")
 ROVER_PORT = os.environ.get("ROVER_PORT")
 
+# Global variable to track autonomy state
+autonomy_running = False
+
 async def read_serial_data(ser: serial.Serial, logger: logging.Logger, room: rtc.Room = None):
     """Read and parse data from serial port."""
     if not ser or not ser.is_open:
@@ -93,6 +96,102 @@ async def send_imu_query(ser: serial.Serial, logger: logging.Logger):
     except Exception as e:
         logger.error(f"Error sending IMU query: {e}")
 
+async def handle_command(ser: serial.Serial, logger: logging.Logger, 
+                        cmd_type: str, distance: int, velocity: float, steering: float):
+    """Handle autonomy command execution."""
+    global autonomy_running
+    
+    # Check if autonomy is already running
+    if autonomy_running:
+        logger.info("Autonomy command already running, ignoring new command")
+        return
+    
+    # Set autonomy running to True
+    autonomy_running = True
+    logger.info(f"Starting autonomy command: type={cmd_type}, distance={distance}m, velocity={velocity}m/s, steering={steering}")
+    
+    try:
+        # Calculate duration based on distance and velocity
+        if velocity <= 0:
+            logger.error("Invalid velocity, must be greater than 0")
+            return
+        
+        duration = distance / velocity
+        logger.info(f"Command will run for {duration:.2f} seconds")
+        
+        # Convert velocity to throttle value
+        # Based on 0.5 throttle ≈ 1.3 m/s, so conversion factor is 2.6
+        throttle_magnitude = velocity / 2.6
+        
+        # Apply direction based on command type
+        if cmd_type == 'forward':
+            throttle = min(throttle_magnitude, 0.5)  # Cap at max forward throttle
+        elif cmd_type == 'backward':
+            throttle = -min(throttle_magnitude, 0.5)  # Cap at max reverse throttle
+        else:
+            logger.error(f"Invalid command type: {cmd_type}")
+            return
+        
+        # Apply Gord_W's formula for steering: y = a * x^3 + (1-a) * x
+        a = 0.5
+        steering_curved = a * (steering ** 3) + (1 - a) * steering
+        
+        # Calculate steering effect
+        steering_effect = steering_curved * 0.3
+        
+        # Invert steering when in reverse
+        if throttle < 0:
+            steering_effect = -steering_effect
+        
+        # Mix throttle and steering
+        left_motor = throttle + steering_effect
+        right_motor = throttle - steering_effect
+        
+        # Ensure values stay within the valid range [-0.5, 0.5]
+        left_motor = max(min(left_motor, 0.5), -0.5)
+        right_motor = max(min(right_motor, 0.5), -0.5)
+        
+        # Round to 3 decimal places
+        left_motor = round(left_motor, 3)
+        right_motor = round(right_motor, 3)
+        
+        # Create command JSON
+        command_data = {
+            "T": 1,  # Type 1 for motor control
+            "L": left_motor,
+            "R": right_motor
+        }
+        
+        logger.info(f"Executing command with L={left_motor}, R={right_motor} for {duration:.2f}s")
+        
+        # Send command to serial port for the calculated duration
+        if ser and ser.is_open:
+            command_json = json.dumps(command_data) + "\n"
+            
+            # Send the command repeatedly during the duration
+            start_time = asyncio.get_event_loop().time()
+            end_time = start_time + duration
+            
+            while asyncio.get_event_loop().time() < end_time:
+                ser.write(command_json.encode())
+                await asyncio.sleep(0.1)  # Send at 10Hz
+            
+            # Stop the rover after command completion
+            stop_command = {"T": 1, "L": 0.0, "R": 0.0}
+            stop_json = json.dumps(stop_command) + "\n"
+            ser.write(stop_json.encode())
+            logger.info("Command execution completed, rover stopped")
+        else:
+            logger.info("Serial connection not available - simulating command execution")
+            await asyncio.sleep(duration)
+            
+    except Exception as e:
+        logger.error(f"Error executing autonomy command: {e}")
+    finally:
+        # Always reset autonomy_running when done
+        autonomy_running = False
+        logger.info("Autonomy command finished")
+
 async def main(room: rtc.Room):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
@@ -136,6 +235,12 @@ async def main(room: rtc.Room):
     @room.on("data_received")
     def on_data_received(data: rtc.DataPacket):
         logger.info("Received data from %s topic: %s", data.participant.identity, data.topic)
+        
+        # If autonomy is running, ignore gamepad commands
+        if autonomy_running and data.topic != "command":
+            logger.info("Autonomy running, ignoring non-command data")
+            return
+        
         try:
             # Decode and parse the data
             decoded_data = data.data.decode('utf-8')
@@ -143,6 +248,42 @@ async def main(room: rtc.Room):
             # Try to parse as JSON
             json_data = json.loads(decoded_data)
             
+            # Handle command topic for autonomy
+            if data.topic == "command":
+                logger.info("Received autonomy command")
+                
+                # Validate command structure
+                if not all(k in json_data for k in ["type", "distance", "velocity", "steering"]):
+                    logger.error("Invalid command format, missing required fields")
+                    return
+                
+                cmd_type = json_data["type"]
+                distance = json_data["distance"]
+                velocity = json_data["velocity"]
+                steering = json_data["steering"]
+                
+                # Validate command values
+                if cmd_type not in ["forward", "backward"]:
+                    logger.error(f"Invalid command type: {cmd_type}")
+                    return
+                
+                if not isinstance(distance, (int, float)) or distance <= 0:
+                    logger.error(f"Invalid distance: {distance}")
+                    return
+                
+                if not isinstance(velocity, (int, float)) or velocity <= 0:
+                    logger.error(f"Invalid velocity: {velocity}")
+                    return
+                
+                if not isinstance(steering, (int, float)) or steering < -1.0 or steering > 1.0:
+                    logger.error(f"Invalid steering: {steering}")
+                    return
+                
+                # Execute the command asynchronously
+                asyncio.create_task(handle_command(ser, logger, cmd_type, distance, velocity, steering))
+                return
+            
+            # Handle gamepad data (existing logic)
             # First validate that data is of type 'gamepad'
             if not json_data.get('type') == 'gamepad':
                 logger.info("Received data is not of type 'gamepad', ignoring")

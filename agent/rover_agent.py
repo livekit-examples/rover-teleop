@@ -2,7 +2,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # dependencies = [
-#   "livekit-agents[deepgram,openai,cartesia,silero,turn-detector,hume]~=1.0",
+#   "livekit-agents[deepgram,openai,cartesia,silero,elevenlabs,turn-detector,hume]~=1.0",
 #   "livekit-plugins-noise-cancellation~=0.2",
 #   "python-dotenv",
 # ]
@@ -17,11 +17,10 @@ from livekit.agents import AgentSession, Agent, RoomInputOptions, get_job_contex
 from livekit.agents.llm import function_tool
 from livekit.plugins import (
     openai,
-    cartesia,
+    elevenlabs,
     deepgram,
     noise_cancellation,
     silero,
-    hume,
 )
 
 load_dotenv()
@@ -32,9 +31,10 @@ logger = logging.getLogger("rover-agent")
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions="""
-                         You are a robot named rover.
+                         You are a robot named TRUFFLE.
                          You are controlled by a user via voice commands.
-                         You will only respond to commands that start with "rover".
+                
+                         If the command does not match one of the following commands, you will do nothing and say nothing in response.
                          Here are the commands you can use:
                          - move_forward <distance in meters> <velocity m/s> <steering -1.0 to 1.0>
                          - move_backward <distance in meters> <velocity m/s> <steering -1.0 to 1.0>
@@ -50,7 +50,7 @@ class Assistant(Agent):
                          If steering is not provided, it will default to 0.0 (straight).
                          If distance is not provided, it will default to 1 meter.
                          
-                         If the user gives you a command that is not one of the above, you will do nothing.
+                         If the user gives you a command that is not one of the above, you will do nothing and say nothing in response.
                          the turn value can be inferred from description such as "Sharp right turn" or "slight left turn" which can be mapped to 1.0 or -0.6.
                          """)
 
@@ -162,8 +162,10 @@ class Assistant(Agent):
 async def entrypoint(ctx: agents.JobContext):
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="en"),
-        llm=openai.LLM(model="gpt-4o-mini"),
-        tts=deepgram.TTS(model="aura-asteria-en"),
+        llm=openai.LLM(model="gpt-4o"),
+        tts=elevenlabs.TTS(
+                model="eleven_multilingual_v2"
+            ),
         vad=silero.VAD.load(),
         # turn_detection=EnglishModel(),
     ) 
@@ -187,4 +189,4 @@ async def entrypoint(ctx: agents.JobContext):
 
 
 if __name__ == "__main__":
-    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint))
+    agents.cli.run_app(agents.WorkerOptions(entrypoint_fnc=entrypoint, agent_name="rover_agent"))

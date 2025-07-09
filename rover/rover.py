@@ -49,12 +49,14 @@ class AudioManager:
         # Audio components
         self.input_stream: sd.InputStream | None = None
         self.source = rtc.AudioSource(SAMPLE_RATE, NUM_CHANNELS)
-        self.audio_input_queue = asyncio.Queue(maxsize=100)
+        # Increase queue size and store raw audio data instead of AudioFrame objects
+        self.audio_input_queue = asyncio.Queue(maxsize=200)
         
         # Debug counters
         self.input_callback_count = 0
         self.frames_processed = 0
         self.frames_sent_to_livekit = 0
+        self.queue_full_count = 0
         
     def start_audio_devices(self):
         """Initialize and start audio input device"""
@@ -83,7 +85,7 @@ class AudioManager:
                     if device_info['max_input_channels'] < NUM_CHANNELS:
                         self.logger.warning(f"Input device only has {device_info['max_input_channels']} channels, need {NUM_CHANNELS}")
             
-            # Start input stream
+            # Start input stream with larger buffer size
             self.input_stream = sd.InputStream(
                 callback=self._input_callback,
                 dtype="int16",
@@ -91,6 +93,7 @@ class AudioManager:
                 device=input_device,
                 samplerate=SAMPLE_RATE,
                 blocksize=BLOCKSIZE,
+                latency='low',  # Request low latency mode
             )
             self.input_stream.start()
             self.logger.info("Started audio input stream")
@@ -115,7 +118,7 @@ class AudioManager:
             self.logger.info("Stopped input stream")
     
     def _input_callback(self, indata: np.ndarray, frame_count: int, time_info, status) -> None:
-        """Sounddevice input callback - processes microphone audio"""
+        """Sounddevice input callback - lightweight processing only"""
         self.input_callback_count += 1
         
         if status:
@@ -132,43 +135,37 @@ class AudioManager:
                            f"indata.dtype={indata.dtype}")
         
         try:
-            # Process audio in 10ms frames
-            num_frames = frame_count // FRAME_SAMPLES
-            
-            for i in range(num_frames):
-                start = i * FRAME_SAMPLES
-                end = start + FRAME_SAMPLES
-                if end > frame_count:
-                    break
+            # Just copy the raw audio data - do minimal processing in callback
+            if self.loop and not self.loop.is_closed():
+                try:
+                    # Copy the audio data to avoid numpy array ownership issues
+                    audio_data = indata.copy()
                     
-                capture_chunk = indata[start:end, 0]
-                
-                # Create audio frame
-                capture_frame = rtc.AudioFrame(
-                    data=capture_chunk.tobytes(),
-                    samples_per_channel=FRAME_SAMPLES,
-                    sample_rate=SAMPLE_RATE,
-                    num_channels=NUM_CHANNELS,
-                )
-                
-                self.frames_processed += 1
-                
-                # Send to LiveKit using the stored event loop reference
-                if self.loop and not self.loop.is_closed():
-                    try:
-                        self.loop.call_soon_threadsafe(
-                            self.audio_input_queue.put_nowait, capture_frame
-                        )
-                        self.frames_sent_to_livekit += 1
+                    # Queue the raw audio data for processing
+                    self.loop.call_soon_threadsafe(
+                        self._try_queue_audio_data, audio_data
+                    )
+                    
+                except Exception as e:
+                    if self.frames_processed <= 10:
+                        self.logger.warning(f"Failed to queue audio data: {e}")
                         
-                        if self.frames_sent_to_livekit <= 5:
-                            self.logger.info(f"Sent frame {self.frames_sent_to_livekit} to LiveKit queue")
-                            
-                    except Exception as e:
-                        if self.frames_processed <= 10:
-                            self.logger.warning(f"Failed to queue audio frame: {e}")
         except Exception as e:
             self.logger.error(f"Error in audio input callback: {e}")
+    
+    def _try_queue_audio_data(self, audio_data: np.ndarray) -> None:
+        """Try to queue audio data, handling queue full gracefully"""
+        try:
+            self.audio_input_queue.put_nowait(audio_data)
+            self.frames_sent_to_livekit += 1
+            
+            if self.frames_sent_to_livekit <= 5:
+                self.logger.info(f"Queued audio data {self.frames_sent_to_livekit}")
+                
+        except asyncio.QueueFull:
+            self.queue_full_count += 1
+            if self.queue_full_count % 100 == 1:  # Log every 100th queue full event
+                self.logger.warning(f"Audio queue full ({self.queue_full_count} times) - dropping audio data")
     
     async def audio_processing_task(self):
         """Process audio frames from input queue and send to LiveKit"""
@@ -177,16 +174,39 @@ class AudioManager:
         
         while self.running:
             try:
-                # Get audio frame from input callback
-                frame = await asyncio.wait_for(self.audio_input_queue.get(), timeout=1.0)
-                await self.source.capture_frame(frame)
-                frames_sent += 1
+                # Get audio data from input callback
+                audio_data = await asyncio.wait_for(self.audio_input_queue.get(), timeout=1.0)
                 
-                if frames_sent <= 5:
-                    self.logger.info(f"Sent frame {frames_sent} to LiveKit source")
-                elif frames_sent % 100 == 0:
-                    self.logger.info(f"Sent {frames_sent} frames total to LiveKit")
+                # Process audio in 10ms frames (moved from callback)
+                frame_count = audio_data.shape[0]
+                num_frames = frame_count // FRAME_SAMPLES
+                
+                for i in range(num_frames):
+                    start = i * FRAME_SAMPLES
+                    end = start + FRAME_SAMPLES
+                    if end > frame_count:
+                        break
+                        
+                    capture_chunk = audio_data[start:end, 0]
                     
+                    # Create audio frame (moved from callback)
+                    capture_frame = rtc.AudioFrame(
+                        data=capture_chunk.tobytes(),
+                        samples_per_channel=FRAME_SAMPLES,
+                        sample_rate=SAMPLE_RATE,
+                        num_channels=NUM_CHANNELS,
+                    )
+                    
+                    # Send to LiveKit
+                    await self.source.capture_frame(capture_frame)
+                    self.frames_processed += 1
+                    frames_sent += 1
+                    
+                    if frames_sent <= 5:
+                        self.logger.info(f"Sent frame {frames_sent} to LiveKit source")
+                    elif frames_sent % 100 == 0:
+                        self.logger.info(f"Sent {frames_sent} frames total to LiveKit")
+                        
             except asyncio.TimeoutError:
                 # No frames to process, continue
                 continue
@@ -201,6 +221,8 @@ class AudioManager:
                 continue
         
         self.logger.info(f"Audio processing task ended. Total frames sent: {frames_sent}")
+        if self.queue_full_count > 0:
+            self.logger.info(f"Audio queue was full {self.queue_full_count} times during session")
 
 async def read_serial_data(ser: serial.Serial, logger: logging.Logger, room: rtc.Room = None):
     """Read and parse data from serial port."""

@@ -522,7 +522,7 @@ async def main(room: rtc.Room):
         except Exception as e:
             logger.error(f"Error processing data: {e}")
 
-    token = generate_token(ROOM_NAME, "rover", "Rover Receiver")
+    token = generate_token(ROOM_NAME, "rover", "Rover")
     await room.connect(LIVEKIT_URL, token, rtc.RoomOptions(auto_subscribe=False))
     logger.info("Connected to room %s", room.name)
 

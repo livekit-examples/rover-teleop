@@ -202,10 +202,10 @@ class AudioManager:
                     self.frames_processed += 1
                     frames_sent += 1
                     
-                    if frames_sent <= 5:
-                        self.logger.info(f"Sent frame {frames_sent} to LiveKit source")
-                    elif frames_sent % 100 == 0:
-                        self.logger.info(f"Sent {frames_sent} frames total to LiveKit")
+                    # if frames_sent <= 5:
+                    #     self.logger.info(f"Sent frame {frames_sent} to LiveKit source")
+                    # elif frames_sent % 100 == 0:
+                    #     self.logger.info(f"Sent {frames_sent} frames total to LiveKit")
                         
             except asyncio.TimeoutError:
                 # No frames to process, continue

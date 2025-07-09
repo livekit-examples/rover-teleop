@@ -31,27 +31,31 @@ logger = logging.getLogger("rover-agent")
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(instructions="""
-                         You are a robot named TRUFFLE.
-                         You are controlled by a user via voice commands.
-                
-                         If the command does not match one of the following commands, you will do nothing and say nothing in response.
-                         Here are the commands you can use:
-                         - move_forward <distance in meters> <velocity m/s> <steering -1.0 to 1.0>
-                         - move_backward <distance in meters> <velocity m/s> <steering -1.0 to 1.0>
+                         You are a robot rover controlled by a user via voice commands.
+                         You do not need to respond to the user, you will only do what the user asks you to do.
+                         
+                         You have access to the following functions:
+                         - move_forward(distance: float, velocity: float, steering: float = 0.0)
+                         - move_backward(distance: float, velocity: float, steering: float = 0.0)
                          
                          the user can give you commands like this:
+                         
                          Move backwards 3 meters
                          Move forward 5 meters at 1 meter per second
                          Move forward 2 meters at 0.5 meters per second with a sharp right turn
-                         Move forward 1 meters with steering of 0.8
+                         Move forwards 1 meters with steering of 0.8
+                         Drive forward 1 meter
+                         Drive backwards 2 meters
                          
                          
-                         If velocity is not provided, it will default to 1 meter per second.
-                         If steering is not provided, it will default to 0.0 (straight).
-                         If distance is not provided, it will default to 1 meter.
+                         If velocity is not provided, default to 1 meter per second.
+                         If steering is not provided, default to 0.0 (straight).
+                         If distance is not provided, default to 1 meter.
+                         If turn or steering is desired, the value should be between -1.0 - -0.4 for left turn and 0.4 - 1.0 for right turn.
+                         If turn or steering is given using a word such as "sharp left turn" or "slight right turn" or "moderate right turn", map that to a value between -1.0 - -0.4 or 0.4 - 1.0 depending on the direction.
                          
                          If the user gives you a command that is not one of the above, you will do nothing and say nothing in response.
-                         the turn value can be inferred from description such as "Sharp right turn" or "slight left turn" which can be mapped to 1.0 or -0.6.
+                         
                          """)
 
     @function_tool

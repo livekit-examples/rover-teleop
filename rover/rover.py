@@ -231,7 +231,7 @@ async def read_serial_data(ser: serial.Serial, logger: logging.Logger, room: rtc
                             'temp': data.get('temp', 0)      # Temperature in Celsius
                         }
                     }
-                    logger.info(f"Parsed IMU data: {imu_data}")
+                    # logger.info(f"Parsed IMU data: {imu_data}")
                     
                     # Publish IMU data to room if available
                     if room and room.isconnected:

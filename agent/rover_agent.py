@@ -23,7 +23,6 @@ from livekit.plugins import (
     silero,
     hume,
 )
-from livekit.plugins.turn_detector.english import EnglishModel
 
 load_dotenv()
 
@@ -166,7 +165,7 @@ async def entrypoint(ctx: agents.JobContext):
         llm=openai.LLM(model="gpt-4o-mini"),
         tts=deepgram.TTS(model="aura-asteria-en"),
         vad=silero.VAD.load(),
-        turn_detection=EnglishModel(),
+        # turn_detection=EnglishModel(),
     ) 
 
     await session.start(
@@ -183,7 +182,7 @@ async def entrypoint(ctx: agents.JobContext):
     await ctx.connect()
 
     await session.generate_reply(
-        instructions="Do nothing, await user command"
+        instructions="Stand by, awaiting user command"
     )
 
 

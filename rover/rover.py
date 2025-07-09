@@ -131,41 +131,44 @@ class AudioManager:
                            f"indata.shape={indata.shape}, "
                            f"indata.dtype={indata.dtype}")
         
-        # Process audio in 10ms frames
-        num_frames = frame_count // FRAME_SAMPLES
-        
-        for i in range(num_frames):
-            start = i * FRAME_SAMPLES
-            end = start + FRAME_SAMPLES
-            if end > frame_count:
-                break
-                
-            capture_chunk = indata[start:end, 0]
+        try:
+            # Process audio in 10ms frames
+            num_frames = frame_count // FRAME_SAMPLES
             
-            # Create audio frame
-            capture_frame = rtc.AudioFrame(
-                data=capture_chunk.tobytes(),
-                samples_per_channel=FRAME_SAMPLES,
-                sample_rate=SAMPLE_RATE,
-                num_channels=NUM_CHANNELS,
-            )
-            
-            self.frames_processed += 1
-            
-            # Send to LiveKit using the stored event loop reference
-            if self.loop and not self.loop.is_closed():
-                try:
-                    self.loop.call_soon_threadsafe(
-                        self.audio_input_queue.put_nowait, capture_frame
-                    )
-                    self.frames_sent_to_livekit += 1
+            for i in range(num_frames):
+                start = i * FRAME_SAMPLES
+                end = start + FRAME_SAMPLES
+                if end > frame_count:
+                    break
                     
-                    if self.frames_sent_to_livekit <= 5:
-                        self.logger.info(f"Sent frame {self.frames_sent_to_livekit} to LiveKit queue")
+                capture_chunk = indata[start:end, 0]
+                
+                # Create audio frame
+                capture_frame = rtc.AudioFrame(
+                    data=capture_chunk.tobytes(),
+                    samples_per_channel=FRAME_SAMPLES,
+                    sample_rate=SAMPLE_RATE,
+                    num_channels=NUM_CHANNELS,
+                )
+                
+                self.frames_processed += 1
+                
+                # Send to LiveKit using the stored event loop reference
+                if self.loop and not self.loop.is_closed():
+                    try:
+                        self.loop.call_soon_threadsafe(
+                            self.audio_input_queue.put_nowait, capture_frame
+                        )
+                        self.frames_sent_to_livekit += 1
                         
-                except Exception as e:
-                    if self.frames_processed <= 10:
-                        self.logger.warning(f"Failed to queue audio frame: {e}")
+                        if self.frames_sent_to_livekit <= 5:
+                            self.logger.info(f"Sent frame {self.frames_sent_to_livekit} to LiveKit queue")
+                            
+                    except Exception as e:
+                        if self.frames_processed <= 10:
+                            self.logger.warning(f"Failed to queue audio frame: {e}")
+        except Exception as e:
+            self.logger.error(f"Error in audio input callback: {e}")
     
     async def audio_processing_task(self):
         """Process audio frames from input queue and send to LiveKit"""
@@ -185,10 +188,17 @@ class AudioManager:
                     self.logger.info(f"Sent {frames_sent} frames total to LiveKit")
                     
             except asyncio.TimeoutError:
+                # No frames to process, continue
                 continue
+            except asyncio.CancelledError:
+                # Task was cancelled, exit gracefully
+                self.logger.info("Audio processing task cancelled")
+                break
             except Exception as e:
                 self.logger.error(f"Error in audio processing: {e}")
-                break
+                # Don't break on error, try to continue
+                await asyncio.sleep(0.1)
+                continue
         
         self.logger.info(f"Audio processing task ended. Total frames sent: {frames_sent}")
 
@@ -553,18 +563,21 @@ async def main(room: rtc.Room):
     else:
         logger.info("Ready to forward gamepad controls to serial port")
     
+
+    
     # Keep the main function running
     try:
-        # Wait indefinitely - let signal handlers take care of cleanup
-        await asyncio.Event().wait()
-    except asyncio.CancelledError:
-        pass
+        # Wait for the loop to be stopped by signal handlers
+        while True:
+            await asyncio.sleep(1)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        logger.info("Received interrupt signal...")
     finally:
         # Cleanup
         logger.info("Starting cleanup...")
         audio_manager.running = False
         
-        if audio_task:
+        if audio_task and not audio_task.done():
             audio_task.cancel()
             try:
                 await audio_task

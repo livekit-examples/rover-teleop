@@ -6,6 +6,8 @@
 #   "pyserial",
 #   "python-dotenv",
 #   "asyncio",
+#   "sounddevice",
+#   "numpy",
 # ]
 # ///
 
@@ -14,10 +16,14 @@ import logging
 import asyncio
 import json
 import serial
+import threading
+import time
 from dotenv import load_dotenv
 from signal import SIGINT, SIGTERM
 from livekit import rtc
 from auth import generate_token
+import sounddevice as sd
+import numpy as np
 
 load_dotenv()
 # ensure LIVEKIT_URL, LIVEKIT_API_KEY, and LIVEKIT_API_SECRET are set in your .env file
@@ -25,8 +31,166 @@ LIVEKIT_URL = os.environ.get("LIVEKIT_URL")
 ROOM_NAME = os.environ.get("ROOM_NAME")
 ROVER_PORT = os.environ.get("ROVER_PORT")
 
+# Audio constants
+SAMPLE_RATE = 48000  # 48kHz to match DC Microphone native rate
+NUM_CHANNELS = 1
+FRAME_SAMPLES = 480  # 10ms at 48kHz
+BLOCKSIZE = 4800  # 100ms buffer
+
 # Global variable to track autonomy state
 autonomy_running = False
+
+class AudioManager:
+    def __init__(self, loop: asyncio.AbstractEventLoop):
+        self.loop = loop
+        self.running = True
+        self.logger = logging.getLogger(__name__)
+        
+        # Audio components
+        self.input_stream: sd.InputStream | None = None
+        self.source = rtc.AudioSource(SAMPLE_RATE, NUM_CHANNELS)
+        self.audio_input_queue = asyncio.Queue(maxsize=100)
+        
+        # Debug counters
+        self.input_callback_count = 0
+        self.frames_processed = 0
+        self.frames_sent_to_livekit = 0
+        
+    def start_audio_devices(self):
+        """Initialize and start audio input device"""
+        try:
+            self.logger.info("Starting audio input device...")
+            
+            # List all devices for debugging
+            self.logger.info("Available audio devices:")
+            try:
+                devices = sd.query_devices()
+                for i, device in enumerate(devices):
+                    self.logger.info(f"  {i}: {device['name']} - {device['max_input_channels']} input channels")
+            except Exception as e:
+                self.logger.warning(f"Could not list audio devices: {e}")
+            
+            # Get default input device
+            input_device, _ = sd.default.device
+            self.logger.info(f"Using input device: {input_device}")
+            
+            if input_device is not None:
+                device_info = sd.query_devices(input_device)
+                if isinstance(device_info, dict):
+                    self.logger.info(f"Input device info: {device_info}")
+                    
+                    # Check if device supports our requirements
+                    if device_info['max_input_channels'] < NUM_CHANNELS:
+                        self.logger.warning(f"Input device only has {device_info['max_input_channels']} channels, need {NUM_CHANNELS}")
+            
+            # Start input stream
+            self.input_stream = sd.InputStream(
+                callback=self._input_callback,
+                dtype="int16",
+                channels=NUM_CHANNELS,
+                device=input_device,
+                samplerate=SAMPLE_RATE,
+                blocksize=BLOCKSIZE,
+            )
+            self.input_stream.start()
+            self.logger.info("Started audio input stream")
+            
+            # Test if stream is active
+            time.sleep(0.1)  # Give stream time to start
+            self.logger.info(f"Input stream active: {self.input_stream.active}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to start audio devices: {e}")
+            raise
+    
+    def stop_audio_devices(self):
+        """Stop and cleanup audio devices"""
+        self.logger.info("Stopping audio devices...")
+        self.running = False
+        
+        if self.input_stream:
+            self.input_stream.stop()
+            self.input_stream.close()
+            self.input_stream = None
+            self.logger.info("Stopped input stream")
+    
+    def _input_callback(self, indata: np.ndarray, frame_count: int, time_info, status) -> None:
+        """Sounddevice input callback - processes microphone audio"""
+        self.input_callback_count += 1
+        
+        if status:
+            self.logger.warning(f"Input callback status: {status}")
+            
+        if not self.running:
+            return
+            
+        # Log first few callbacks for debugging
+        if self.input_callback_count <= 5:
+            self.logger.info(f"Input callback #{self.input_callback_count}: "
+                           f"frame_count={frame_count}, "
+                           f"indata.shape={indata.shape}, "
+                           f"indata.dtype={indata.dtype}")
+        
+        # Process audio in 10ms frames
+        num_frames = frame_count // FRAME_SAMPLES
+        
+        for i in range(num_frames):
+            start = i * FRAME_SAMPLES
+            end = start + FRAME_SAMPLES
+            if end > frame_count:
+                break
+                
+            capture_chunk = indata[start:end, 0]
+            
+            # Create audio frame
+            capture_frame = rtc.AudioFrame(
+                data=capture_chunk.tobytes(),
+                samples_per_channel=FRAME_SAMPLES,
+                sample_rate=SAMPLE_RATE,
+                num_channels=NUM_CHANNELS,
+            )
+            
+            self.frames_processed += 1
+            
+            # Send to LiveKit using the stored event loop reference
+            if self.loop and not self.loop.is_closed():
+                try:
+                    self.loop.call_soon_threadsafe(
+                        self.audio_input_queue.put_nowait, capture_frame
+                    )
+                    self.frames_sent_to_livekit += 1
+                    
+                    if self.frames_sent_to_livekit <= 5:
+                        self.logger.info(f"Sent frame {self.frames_sent_to_livekit} to LiveKit queue")
+                        
+                except Exception as e:
+                    if self.frames_processed <= 10:
+                        self.logger.warning(f"Failed to queue audio frame: {e}")
+    
+    async def audio_processing_task(self):
+        """Process audio frames from input queue and send to LiveKit"""
+        frames_sent = 0
+        self.logger.info("Audio processing task started")
+        
+        while self.running:
+            try:
+                # Get audio frame from input callback
+                frame = await asyncio.wait_for(self.audio_input_queue.get(), timeout=1.0)
+                await self.source.capture_frame(frame)
+                frames_sent += 1
+                
+                if frames_sent <= 5:
+                    self.logger.info(f"Sent frame {frames_sent} to LiveKit source")
+                elif frames_sent % 100 == 0:
+                    self.logger.info(f"Sent {frames_sent} frames total to LiveKit")
+                    
+            except asyncio.TimeoutError:
+                continue
+            except Exception as e:
+                self.logger.error(f"Error in audio processing: {e}")
+                break
+        
+        self.logger.info(f"Audio processing task ended. Total frames sent: {frames_sent}")
 
 async def read_serial_data(ser: serial.Serial, logger: logging.Logger, room: rtc.Room = None):
     """Read and parse data from serial port."""
@@ -196,6 +360,12 @@ async def main(room: rtc.Room):
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
+    # Get the running event loop
+    loop = asyncio.get_running_loop()
+    
+    # Initialize audio manager
+    audio_manager = AudioManager(loop)
+    
     # Try to connect to serial port, but continue even if failed
     ser = None
     try:
@@ -356,10 +526,53 @@ async def main(room: rtc.Room):
     await room.connect(LIVEKIT_URL, token, rtc.RoomOptions(auto_subscribe=False))
     logger.info("Connected to room %s", room.name)
 
+    # Start audio devices
+    try:
+        audio_manager.start_audio_devices()
+        logger.info("Audio devices started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start audio devices: {e}")
+        logger.info("Continuing without audio")
+
+    # Start audio processing task
+    audio_task = None
+    try:
+        audio_task = asyncio.create_task(audio_manager.audio_processing_task())
+        
+        # Publish microphone track
+        track = rtc.LocalAudioTrack.create_audio_track("mic", audio_manager.source)
+        options = rtc.TrackPublishOptions()
+        options.source = rtc.TrackSource.SOURCE_MICROPHONE
+        publication = await room.local_participant.publish_track(track, options)
+        logger.info("Published microphone track %s", publication.sid)
+    except Exception as e:
+        logger.error(f"Failed to publish microphone track: {e}")
+
     if not ser:
         logger.warning("Running without serial connection - will only log received gamepad data")
     else:
         logger.info("Ready to forward gamepad controls to serial port")
+    
+    # Keep the main function running
+    try:
+        # Wait indefinitely - let signal handlers take care of cleanup
+        await asyncio.Event().wait()
+    except asyncio.CancelledError:
+        pass
+    finally:
+        # Cleanup
+        logger.info("Starting cleanup...")
+        audio_manager.running = False
+        
+        if audio_task:
+            audio_task.cancel()
+            try:
+                await audio_task
+            except asyncio.CancelledError:
+                pass
+        
+        audio_manager.stop_audio_devices()
+        logger.info("Cleanup complete")
 
 
 if __name__ == "__main__":

@@ -38,16 +38,19 @@ class Assistant(Agent):
                          - move_forward(distance: float, velocity: float, steering: float = 0.0)
                          - move_backward(distance: float, velocity: float, steering: float = 0.0)
                          
-                         the user can give you commands like this:
-                         
+                         the user can give you commands like the following, which you can call the functions to move the rover:
                          Move backwards 3 meters
                          Move forward 5 meters at 1 meter per second
                          Move forward 2 meters at 0.5 meters per second with a sharp right turn
+                         Move forwards 1 meter while making a sharp left turn
+                         Move forwards 1 meter with a left turn
                          Move forwards 1 meters with steering of 0.8
                          Drive forward 1 meter
                          Drive backwards 2 meters
                          
+                        #end of examples
                          
+                        Rules to follow:
                          If velocity is not provided, default to 1 meter per second.
                          If steering is not provided, default to 0.0 (straight).
                          If distance is not provided, default to 1 meter.
@@ -164,9 +167,12 @@ class Assistant(Agent):
 
 
 async def entrypoint(ctx: agents.JobContext):
+    await ctx.connect()
+
     session = AgentSession(
         stt=deepgram.STT(model="nova-3", language="en"),
-        llm=openai.LLM(model="gpt-4o"),
+        # llm=openai.LLM(model="gpt-4o"),
+        llm=openai.LLM.with_x_ai(model="grok-2-vision"),
         tts=elevenlabs.TTS(
                 model="eleven_multilingual_v2"
             ),
@@ -178,17 +184,12 @@ async def entrypoint(ctx: agents.JobContext):
         room=ctx.room,
         agent=Assistant(),
         room_input_options=RoomInputOptions(
+            participant_identity='rover'
             # LiveKit Cloud enhanced noise cancellation
             # - If self-hosting, omit this parameter
             # - For telephony applications, use `BVCTelephony` for best results
-            noise_cancellation=noise_cancellation.BVC(), 
+            #noise_cancellation=noise_cancellation.BVC(), 
         ),
-    )
-
-    await ctx.connect()
-
-    await session.generate_reply(
-        instructions="Stand by, awaiting user command"
     )
 
 
